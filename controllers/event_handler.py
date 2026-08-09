@@ -98,7 +98,7 @@ class EventHandler:
         if modifiers == Qt.KeyboardModifier.NoModifier:
             global_keys = (Qt.Key.Key_Space, Qt.Key.Key_Escape,
                            Qt.Key.Key_F, Qt.Key.Key_E,
-                           Qt.Key.Key_L, Qt.Key.Key_M,
+                           Qt.Key.Key_L, Qt.Key.Key_J,
                            Qt.Key.Key_Y, Qt.Key.Key_Tab,
                            Qt.Key.Key_F5, Qt.Key.Key_F11,
                            Qt.Key.Key_Backspace, Qt.Key.Key_S,
@@ -360,7 +360,7 @@ class EventHandler:
                     if hasattr(w, '_open_stream'):
                         w._open_stream()
                     return True
-                elif key == Qt.Key.Key_M:
+                elif key == Qt.Key.Key_J:
                     if hasattr(w, 'toggle_mute'):
                         w.toggle_mute()
                     return True

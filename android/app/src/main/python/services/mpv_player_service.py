@@ -1468,6 +1468,10 @@ class MpvPlayerController(QObject):
                 self._safe_emit(self.play_error, "mpv播放器初始化失败")
                 return False
 
+            # 先保存旧频道的播放位置，再更新 current_url
+            # 根因修复：之前 current_url = url 在前，导致 old_url 读取的是新 URL，
+            # 旧频道的播放位置被错误地保存到新频道的 URL 下
+            _prev_url = self.current_url
             self.current_url = url
             self._user_stopped = False
             self._switching_channel = True
@@ -1494,7 +1498,7 @@ class MpvPlayerController(QObject):
             # 避免 keep-open=yes + idle=yes 导致旧解码器未释放，新文件 hwdec 初始化失败（黑屏）
             if (self.is_playing or self.is_paused) and not self._user_stopped:
                 # 保存本地视频播放位置（stop 触发的 END_FILE reason=STOP 不会保存位置）
-                old_url = self.current_url or ''
+                old_url = _prev_url or ''
                 if old_url and not self._is_network_url(old_url):
                     try:
                         pos_sec = self._get_mpv_property_double('time-pos') or 0.0

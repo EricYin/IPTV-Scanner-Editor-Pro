@@ -678,6 +678,8 @@ class IPTVPlayer(
         self._create_status_bar()
         # 4. 播放器
         self._update_splash("Initializing player...")
+        from PySide6.QtWidgets import QApplication as _QApp
+        _QApp.instance().processEvents()
         self._init_player()
         # 5. 定时器
         self._create_timer()
@@ -688,13 +690,17 @@ class IPTVPlayer(
         self._install_event_filters()
 
         # ---- 所有同步 UI 构建完成，现在显示窗口 ----
+        self._update_splash("Loading panels...")
+        _QApp.instance().processEvents()
         self.show()
 
         # 6-8. 延迟创建面板（窗口已显示，避免阻塞首帧）
-        self._update_splash("Loading panels...")
         self._create_epg_panel(show=False)
+        _QApp.instance().processEvents()
         self._create_playlist_panel(show=False)
+        _QApp.instance().processEvents()
         self._create_bottom_panel(show=False)
+        _QApp.instance().processEvents()
 
         # 11. 注册清理 / 主题 / 快捷键（轻量，不阻塞）
         from utils.resource_cleaner import register_cleanup

@@ -33,6 +33,7 @@ class EventMixin:
             event.ignore()
 
     def dropEvent(self, event):
+        has_media = False
         for url in event.mimeData().urls():
             path = url.toLocalFile()
             if not path:
@@ -45,9 +46,11 @@ class EventMixin:
             elif path.lower().endswith(self.VIDEO_EXTENSIONS + self.AUDIO_EXTENSIONS):
                 self._add_local_video_and_track(path)
                 logger.info(f"拖放打开视频文件: {path}")
-                event.acceptProposedAction()
-                return
-        event.ignore()
+                has_media = True
+        if has_media:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
     def _fix_win32_drag_drop(self):
 
