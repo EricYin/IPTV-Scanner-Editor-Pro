@@ -43,6 +43,7 @@ def is_android_hdr_enabled():
         activity = PythonActivity.mActivity
         window_manager = activity.getSystemService('window')
         display = window_manager.getDefaultDisplay()
+        types = []
         if hasattr(display, 'getHdrCapabilities'):
             caps = display.getHdrCapabilities()
             types = caps.getSupportedHdrTypes()

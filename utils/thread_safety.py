@@ -1,7 +1,24 @@
 import threading
 import weakref
 from concurrent.futures import Future
-from PySide6.QtCore import QThread, QObject, Signal, Qt, Slot
+from PySide6.QtCore import QThread, QObject, Signal, Qt, Slot, QTimer
+
+try:
+    from shiboken6 import isValid as _shiboken_isvalid
+except ImportError:
+    _shiboken_isvalid = None
+
+
+def safe_single_shot(ms: int, target, callback):
+    """QTimer.singleShot 带 shiboken 有效性校验。
+
+    若 target 是 Qt 对象且已被销毁，回调不会执行，避免 RuntimeError。
+    target 为 None 时直接执行回调。
+    """
+    def _guarded():
+        if target is None or _shiboken_isvalid is None or _shiboken_isvalid(target):
+            callback()
+    QTimer.singleShot(ms, _guarded)
 
 
 class _CallbackRelay(QObject):
@@ -37,7 +54,12 @@ def _get_relay_for_thread(owner_obj):
         if owner_obj in _relay_instances:
             return _relay_instances[owner_obj]
     relay = _CallbackRelay()
-    relay.moveToThread(owner_obj.thread())
+    try:
+        target_thread = owner_obj.thread()
+        if target_thread is not None:
+            relay.moveToThread(target_thread)
+    except RuntimeError:
+        pass
     with _relay_lock:
         if owner_obj not in _relay_instances:
             _relay_instances[owner_obj] = relay
@@ -61,7 +83,11 @@ def invoke_on_thread(owner_obj, callback):
         owner_obj: Qt 对象，用于确定目标线程
         callback: 要在目标线程执行的回调函数
     """
-    if QThread.currentThread() == owner_obj.thread():
+    try:
+        same_thread = QThread.currentThread() == owner_obj.thread()
+    except RuntimeError:
+        same_thread = True
+    if same_thread:
         callback()
     else:
         relay = _get_relay_for_thread(owner_obj)

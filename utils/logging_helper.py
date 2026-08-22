@@ -134,7 +134,8 @@ class LoggingHelper(Singleton):
 
     def clear_pattern_cache(self):
         """清空日志模式缓存"""
-        self._logged_patterns.clear()
+        with self._lock:
+            self._logged_patterns.clear()
 
     def set_suppression_threshold(self, seconds: int):
         """设置重复日志抑制阈值（秒）"""

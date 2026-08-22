@@ -143,6 +143,9 @@ class ProgressManager(Singleton):
         Args:
             message: 完成消息
         """
+        if not _is_main_thread():
+            QtCore.QTimer.singleShot(0, lambda: self.complete_progress(message))
+            return
         if self._progress_bar:
             self._progress_bar.setValue(self._progress_bar.maximum())
 
