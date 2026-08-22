@@ -1,6 +1,5 @@
 import re
-from typing import Dict, Any, List, Optional
-from core.log_manager import global_logger as logger
+from typing import Dict, Any, List
 
 
 class BatchEditService:

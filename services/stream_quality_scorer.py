@@ -1,5 +1,4 @@
 from typing import Dict, Any, Optional
-from core.log_manager import global_logger as logger
 
 
 class StreamQualityScorer:
@@ -116,8 +115,10 @@ class StreamQualityScorer:
         br_raw = channel.get('bitrate', '') or channel.get('video_bitrate', '')
         if br_raw:
             try:
-                bitrate = float(str(br_raw).replace('kbps', '').replace('Mbps', '').strip())
-                if 'Mbps' in str(br_raw):
+                br_str = str(br_raw).strip()
+                br_lower = br_str.lower()
+                bitrate = float(br_lower.replace('kbps', '').replace('mbps', '').strip())
+                if 'mbps' in br_lower:
                     bitrate *= 1000
             except (ValueError, TypeError):
                 pass

@@ -74,7 +74,7 @@ def parse_fcc_from_url(url: str) -> Optional[Tuple[str, int]]:
     try:
         parsed = urlparse(url)
         qs = parse_qs(parsed.query)
-        fcc_val = qs.get('fcc', [None])
+        fcc_val = qs.get('fcc', qs.get('FCC', [None]))
         if not fcc_val or not fcc_val[0]:
             return None
         fcc_addr = fcc_val[0]

@@ -16,10 +16,10 @@ import os
 import re
 import socket
 import threading
-import urllib.error
-import urllib.parse
-import urllib.request
 import xmlrpc.client
+import urllib.request
+import urllib.parse
+import urllib.error
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
 from core.log_manager import global_logger as logger
 
@@ -446,7 +446,7 @@ class SubtitleDownloadService:
                     if len(buf) < 8:
                         break
                     (val,) = _unpack_qword(buf)
-                    hash_val = (hash_val + val) & 0xFFFFFFFFFFFFFFFFFFFF  # 64-bit
+                    hash_val = (hash_val + val) & 0xFFFFFFFFFFFFFFFF  # 64-bit
                 # 后 64KB
                 f.seek(max(0, size - 65536))
                 for i in range(0, 65536, 8):
@@ -454,7 +454,7 @@ class SubtitleDownloadService:
                     if len(buf) < 8:
                         break
                     (val,) = _unpack_qword(buf)
-                    hash_val = (hash_val + val) & 0xFFFFFFFFFFFFFFFFFFFF
+                    hash_val = (hash_val + val) & 0xFFFFFFFFFFFFFFFF
             return f"{hash_val:016x}", size
         except Exception as e:
             logger.debug(f"计算文件 hash 失败: {e}")

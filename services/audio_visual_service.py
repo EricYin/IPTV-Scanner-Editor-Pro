@@ -5,14 +5,21 @@ import threading
 import time
 import os
 
-from collections import deque
 
 import numpy as np
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import QTimer, Qt, QRectF, QPointF
-from PySide6.QtGui import (QPainter, QColor, QLinearGradient, QRadialGradient,
-                            QPen, QBrush, QFont, QPixmap, QImage, QPolygonF,
-                            QConicalGradient)
+from PySide6.QtGui import (
+    QPen,
+    QBrush,
+    QPixmap,
+    QImage,
+    QPolygonF,
+    QColor,
+    QPainter,
+    QRadialGradient,
+    QLinearGradient,
+)
 
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.wav', '.aac', '.ogg', '.opus', '.wma', '.m4a',
                     '.ape', '.alac', '.wv', '.tta', '.dts', '.ac3', '.mid', '.midi')
@@ -66,6 +73,7 @@ NUM_BARS = 64
 
 class AudioPCMProvider:
     def __init__(self):
+        self._lock = threading.Lock()
         self._pcm_mono = np.zeros(0, dtype=np.float32)
         self._pcm_left = np.zeros(0, dtype=np.float32)
         self._pcm_right = np.zeros(0, dtype=np.float32)
@@ -73,36 +81,41 @@ class AudioPCMProvider:
         self._duration = 0.0
         self._time_pos = 0.0
         self._loading = False
+        self._decode_generation = 0
 
     def start(self, file_path):
-        self._pcm_mono = np.zeros(0, dtype=np.float32)
-        self._pcm_left = np.zeros(0, dtype=np.float32)
-        self._pcm_right = np.zeros(0, dtype=np.float32)
-        self._duration = 0.0
-        self._time_pos = 0.0
-        self._loading = True
-        import threading
-        threading.Thread(target=self._decode_file, args=(file_path,), daemon=True).start()
+        with self._lock:
+            self._decode_generation += 1
+            my_gen = self._decode_generation
+            self._pcm_mono = np.zeros(0, dtype=np.float32)
+            self._pcm_left = np.zeros(0, dtype=np.float32)
+            self._pcm_right = np.zeros(0, dtype=np.float32)
+            self._duration = 0.0
+            self._time_pos = 0.0
+            self._loading = True
+        threading.Thread(target=self._decode_file, args=(file_path, my_gen), daemon=True).start()
 
     def stop(self):
-        self._pcm_mono = np.zeros(0, dtype=np.float32)
-        self._pcm_left = np.zeros(0, dtype=np.float32)
-        self._pcm_right = np.zeros(0, dtype=np.float32)
-        self._duration = 0.0
+        with self._lock:
+            self._pcm_mono = np.zeros(0, dtype=np.float32)
+            self._pcm_left = np.zeros(0, dtype=np.float32)
+            self._pcm_right = np.zeros(0, dtype=np.float32)
+            self._duration = 0.0
 
     def update_time_pos(self, time_pos):
         self._time_pos = max(0.0, time_pos)
 
     def get_samples(self, count=FFT_SIZE):
-        if len(self._pcm_mono) == 0:
-            return np.zeros(count, dtype=np.float32)
-        idx = int(self._time_pos * self._sample_rate)
-        start = max(0, idx - count)
-        end = start + count
-        if end > len(self._pcm_mono):
-            end = len(self._pcm_mono)
-            start = max(0, end - count)
-        chunk = self._pcm_mono[start:end]
+        with self._lock:
+            if len(self._pcm_mono) == 0:
+                return np.zeros(count, dtype=np.float32)
+            idx = int(self._time_pos * self._sample_rate)
+            start = max(0, idx - count)
+            end = start + count
+            if end > len(self._pcm_mono):
+                end = len(self._pcm_mono)
+                start = max(0, end - count)
+            chunk = self._pcm_mono[start:end].copy()
         if len(chunk) < count:
             padded = np.zeros(count, dtype=np.float32)
             padded[:len(chunk)] = chunk
@@ -110,13 +123,14 @@ class AudioPCMProvider:
         return chunk
 
     def get_stereo_samples(self, count=256):
-        if len(self._pcm_left) == 0:
-            return np.zeros(count, dtype=np.float32), np.zeros(count, dtype=np.float32)
-        idx = int(self._time_pos * self._sample_rate)
-        start = max(0, idx - count)
-        end = start + count
-        left = self._pcm_left[start:end]
-        right = self._pcm_right[start:end]
+        with self._lock:
+            if len(self._pcm_left) == 0:
+                return np.zeros(count, dtype=np.float32), np.zeros(count, dtype=np.float32)
+            idx = int(self._time_pos * self._sample_rate)
+            start = max(0, idx - count)
+            end = start + count
+            left = self._pcm_left[start:end].copy()
+            right = self._pcm_right[start:end].copy()
         if len(left) < count:
             padded_l = np.zeros(count, dtype=np.float32)
             padded_r = np.zeros(count, dtype=np.float32)
@@ -125,8 +139,9 @@ class AudioPCMProvider:
             return padded_l, padded_r
         return left, right
 
-    def _decode_file(self, file_path):
+    def _decode_file(self, file_path, my_gen):
         from core.log_manager import global_logger as _log
+        proc = None
         try:
             native_path = os.path.normpath(file_path)
             _log.info(f"音频可视化: 开始预解码 {native_path}")
@@ -141,20 +156,28 @@ class AudioPCMProvider:
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             )
             chunks = []
-            while True:
+            deadline = time.time() + 60
+            while time.time() < deadline:
                 raw = proc.stdout.read(SAMPLE_RATE * AUDIO_CHANNELS * 2)
                 if not raw:
                     break
                 samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
                 chunks.append(samples)
             stderr_out = proc.stderr.read().decode('utf-8', errors='ignore') if proc.stderr else ''
-            proc.wait()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
             if chunks:
                 all_samples = np.concatenate(chunks)
-                self._pcm_left = all_samples[0::2].copy()
-                self._pcm_right = all_samples[1::2].copy()
-                self._pcm_mono = (self._pcm_left + self._pcm_right) / 2.0
-                self._duration = len(self._pcm_mono) / self._sample_rate
+                with self._lock:
+                    if my_gen != self._decode_generation:
+                        return
+                    self._pcm_left = all_samples[0::2].copy()
+                    self._pcm_right = all_samples[1::2].copy()
+                    self._pcm_mono = (self._pcm_left + self._pcm_right) / 2.0
+                    self._duration = len(self._pcm_mono) / self._sample_rate
                 _log.info(f"音频可视化: 预解码完成, {self._duration:.1f}s, {len(self._pcm_mono)} samples")
             else:
                 _log.warning(f"音频可视化: 预解码无数据, stderr={stderr_out[:500]}")
@@ -162,6 +185,15 @@ class AudioPCMProvider:
             _log.error(f"音频可视化: 预解码失败 {e}")
         finally:
             self._loading = False
+            if proc is not None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    proc.wait(timeout=5)
+                except Exception:
+                    pass
 
 
 def compute_spectrum(samples, fft_size=FFT_SIZE, num_bars=NUM_BARS):

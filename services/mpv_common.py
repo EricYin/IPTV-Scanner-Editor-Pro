@@ -2,6 +2,7 @@ import ctypes
 import os
 import sys
 import locale
+import threading
 
 from core.log_manager import global_logger as logger
 from utils.platform_utils import find_libmpv_path, find_libmpv_paths, get_libmpv_filename, is_windows, is_macos, is_linux, is_android
@@ -627,6 +628,7 @@ def observe_property(handle, reply_userdata, name, fmt):
 
 
 _callback_refs = []
+_callback_refs_lock = threading.Lock()
 _MAX_CALLBACK_REFS = 16
 
 
@@ -634,9 +636,10 @@ def set_wakeup_callback(handle, callback, data):
     if not handle or not libmpv:
         return
     try:
-        _callback_refs.append(callback)
-        if len(_callback_refs) > _MAX_CALLBACK_REFS:
-            _callback_refs[:] = _callback_refs[-_MAX_CALLBACK_REFS:]
+        with _callback_refs_lock:
+            _callback_refs.append(callback)
+            if len(_callback_refs) > _MAX_CALLBACK_REFS:
+                _callback_refs[:] = _callback_refs[-_MAX_CALLBACK_REFS:]
         libmpv.mpv_set_wakeup_callback(handle, callback, data)
     except Exception:
         pass
@@ -669,6 +672,7 @@ class mpv_render_param(ctypes.Structure):
 
 
 _RENDER_CB_REFS = []
+_render_cb_refs_lock = threading.Lock()
 
 
 def init_render_api():
@@ -766,9 +770,10 @@ def render_context_set_update_callback(render_ctx, callback, user_data=None):
     if not libmpv or not render_ctx:
         return
     try:
-        _RENDER_CB_REFS.append(callback)
-        if len(_RENDER_CB_REFS) > _MAX_CALLBACK_REFS:
-            _RENDER_CB_REFS[:] = _RENDER_CB_REFS[-_MAX_CALLBACK_REFS:]
+        with _render_cb_refs_lock:
+            _RENDER_CB_REFS.append(callback)
+            if len(_RENDER_CB_REFS) > _MAX_CALLBACK_REFS:
+                _RENDER_CB_REFS[:] = _RENDER_CB_REFS[-_MAX_CALLBACK_REFS:]
         libmpv.mpv_render_context_set_update_callback(render_ctx, callback, user_data or ctypes.c_void_p(0))
     except Exception as e:
         logger.error(f"mpv_render_context_set_update_callback异常: {e}")

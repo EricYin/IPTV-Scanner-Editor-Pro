@@ -9,7 +9,6 @@ from services.mpv_common import (
     MPV_EVENT_END_FILE,
     MPV_EVENT_VIDEO_RECONFIG,
     MPV_EVENT_SHUTDOWN,
-    MPV_FORMAT_INT64,
     MPV_END_FILE_REASON_EOF,
     MPV_END_FILE_REASON_STOP,
     MPV_END_FILE_REASON_ERROR,
@@ -397,7 +396,9 @@ class MpvStreamValidator:
 
     @classmethod
     def set_max_concurrent(cls, max_count):
-        cls._semaphore = threading.Semaphore(max(1, max_count))
+        if not getattr(cls, '_semaphore_initialized', False):
+            cls._semaphore = threading.Semaphore(max(1, max_count))
+            cls._semaphore_initialized = True
 
     @classmethod
     def set_user_agent(cls, user_agent: str):

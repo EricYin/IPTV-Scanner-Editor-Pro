@@ -334,12 +334,3 @@ class URLRangeParser:
         url += url_parts[-1]
         return url
 
-    def _find_all_ranges(self, url: str) -> List[Tuple[int, int, str]]:
-        ranges = []
-        for match in self.range_pattern.finditer(url):
-            content = match.group(1)
-            parsed_segments, _ = self._parse_bracket_content(content)
-            for start, end, _ in parsed_segments:
-                full_match = f"{start}-{end}" if start != end else str(start)
-                ranges.append((start, end, full_match))
-        return ranges

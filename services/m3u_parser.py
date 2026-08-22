@@ -377,7 +377,7 @@ def _parse_extinf_line(extinf_content: str, current_group: Union[str, List[str]]
         return None, current_group, True
 
     last_comma = extinf_content.rfind(",")
-    if last_comma > 0:
+    if last_comma >= 0:
         attrs_part = extinf_content[:last_comma].strip()
         name = extinf_content[last_comma + 1:].strip()
     else:

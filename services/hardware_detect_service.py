@@ -4,10 +4,10 @@
 缩放算法和着色器选择，避免在低端设备上开启过重的处理导致卡顿。
 """
 import os
-import sys
 import subprocess
 
 from core.log_manager import global_logger as logger
+from utils.platform_utils import is_windows, is_macos, is_linux
 
 
 class HardwareDetectService:
@@ -42,7 +42,7 @@ class HardwareDetectService:
 
         # 获取 CPU 型号名
         try:
-            if sys.platform == 'win32':
+            if is_windows():
                 result = subprocess.run(
                     ['wmic', 'cpu', 'get', 'name'],
                     capture_output=True, text=True, timeout=5
@@ -50,12 +50,12 @@ class HardwareDetectService:
                 lines = [line.strip() for line in result.stdout.split('\n') if line.strip()]
                 if len(lines) > 1:
                     info['name'] = lines[1]
-            elif sys.platform == 'darwin':
+            elif is_macos():
                 info['name'] = subprocess.check_output(
                     ['sysctl', '-n', 'machdep.cpu.brand_string'],
                     text=True, timeout=5
                 ).strip()
-            elif sys.platform.startswith('linux'):
+            elif is_linux():
                 with open('/proc/cpuinfo', 'r') as f:
                     for line in f:
                         if line.startswith('model name'):
@@ -87,7 +87,7 @@ class HardwareDetectService:
             return self._gpu_info
         info = {'name': 'Unknown', 'vram_mb': 0, 'type': 'unknown'}
         try:
-            if sys.platform == 'win32':
+            if is_windows():
                 result = subprocess.run(
                     ['wmic', 'path', 'win32_VideoController', 'get', 'name,AdapterRAM'],
                     capture_output=True, text=True, timeout=5
@@ -103,7 +103,7 @@ class HardwareDetectService:
                             pass
                     else:
                         info['name'] = lines[1]
-            elif sys.platform == 'darwin':
+            elif is_macos():
                 result = subprocess.run(
                     ['system_profiler', 'SPDisplaysDataType'],
                     capture_output=True, text=True, timeout=5
@@ -119,7 +119,7 @@ class HardwareDetectService:
                                 pass
                         if 'Chipset' in line:
                             info['name'] = line.split(':')[1].strip()
-            elif sys.platform.startswith('linux'):
+            elif is_linux():
                 try:
                     result = subprocess.run(
                         ['lspci', '-v'],
@@ -253,10 +253,12 @@ class HardwareDetectService:
 
 # 单例
 _instance = None
+_instance_lock = __import__('threading').Lock()
 
 
 def get_hardware_detect_service() -> HardwareDetectService:
     global _instance
-    if _instance is None:
-        _instance = HardwareDetectService()
+    with _instance_lock:
+        if _instance is None:
+            _instance = HardwareDetectService()
     return _instance
