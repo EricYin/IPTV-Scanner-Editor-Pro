@@ -15,6 +15,14 @@ class EventHandler:
         self.window: MainWindowProtocol = main_window
         self._shortcuts = {}  # 快捷键映射表
 
+    def _adjust_volume(self, delta: int):
+        """调整音量（增量/减量），委托给 media_controller"""
+        mc = getattr(self.window, 'update_ctrl', None)
+        if mc and hasattr(mc, '_set_volume'):
+            vs = getattr(self.window, 'volume_slider', None)
+            current = vs.value() if vs else 100
+            mc._set_volume(max(0, min(current + delta, 100)))
+
     def _is_main_window_focused(self) -> bool:
         """判断当前焦点是否在主窗口上（排除悬浮面板、对话框等）"""
         from PySide6.QtWidgets import QApplication
