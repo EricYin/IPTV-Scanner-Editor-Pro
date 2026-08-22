@@ -723,7 +723,7 @@ class ScannerController(QObject):
             self._mapping_executor = None
 
         self.workers = []
-        self.worker_queue = queue.Queue()
+
 
     def _clear_all_queues(self):
         """清空所有队列"""
@@ -900,7 +900,7 @@ class ScannerController(QObject):
         self._validator = None
 
         self.workers = []
-        self.worker_queue = queue.Queue()
+
 
     def _validation_worker(self):
         while not self.stop_event.is_set():
@@ -980,8 +980,8 @@ class ScannerController(QObject):
 
     def _update_stats(self):
         """更新统计信息线程"""
-        import time
         was_validation = False
+        workers_snapshot = list(self.workers)
         try:
             # 简化逻辑：只要没有停止事件就持续更新统计信息
             while not self.stop_event.is_set():
@@ -1079,9 +1079,9 @@ class ScannerController(QObject):
                     error_summary = ", ".join([f"{err}({cnt})" for err, cnt in top_errors])
                     self.logger.info(f"无效URL错误类型分布（前5）: {error_summary}")
                     if 'timeout' in error_counts:
-                        self.logger.warning(f"⚠️ 有 {error_counts['timeout']} 个URL因超时被标记为无效，考虑增加超时时间")
+                        self.logger.warning(f"[WARNING] 有 {error_counts['timeout']} 个URL因超时被标记为无效，考虑增加超时时间")
                     if 'mpv_create_failed' in error_counts:
-                        self.logger.error(f"❌ 有 {error_counts['mpv_create_failed']} 个mpv实例创建失败，可能是资源不足")
+                        self.logger.error(f"[ERROR] 有 {error_counts['mpv_create_failed']} 个mpv实例创建失败，可能是资源不足")
 
                 try:
                     if self.main_window and hasattr(self.main_window, '_on_scan_completed'):
@@ -1095,7 +1095,7 @@ class ScannerController(QObject):
                     self.logger.error(f"调用主窗口方法失败: {e}")
         finally:
             # 等待所有工作线程完成，确保最终的统计信息被发送
-            for worker in self.workers:
+            for worker in workers_snapshot:
                 if worker.is_alive():
                     worker.join(timeout=1.0)
 

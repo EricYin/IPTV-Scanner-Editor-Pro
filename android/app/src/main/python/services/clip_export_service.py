@@ -190,7 +190,15 @@ class ClipExportService:
             )
             with self._proc_lock:
                 self._proc = proc
-            stdout, stderr = proc.communicate()
+            try:
+                stdout, stderr = proc.communicate(timeout=300)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                with self._proc_lock:
+                    self._proc = None
+                self._call(done_callback, False, self._tr('clip_export_cancelled', '已取消'))
+                return
             with self._proc_lock:
                 self._proc = None
             if self._cancel:
@@ -234,7 +242,16 @@ class ClipExportService:
             )
             with self._proc_lock:
                 self._proc = proc
-            stdout, stderr = proc.communicate()
+            try:
+                stdout, stderr = proc.communicate(timeout=300)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                with self._proc_lock:
+                    self._proc = None
+                self._cleanup_tmp(tmp_dir)
+                self._call(done_callback, False, self._tr('clip_export_cancelled', '已取消'))
+                return
             with self._proc_lock:
                 self._proc = None
             if self._cancel:

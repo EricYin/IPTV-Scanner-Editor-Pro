@@ -119,7 +119,7 @@ class StandaloneScanner:
             logger.info(f"URL 范围扫描：共 {len(all_urls)} 个 URL")
 
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            import requests as _requests
+            from utils.http_session import get as _http_get
             import socket
             from urllib.parse import urlparse
             found_channels: List[Dict] = []
@@ -134,17 +134,16 @@ class StandaloneScanner:
                     return (u, False, '已取消', 0, None)
                 low = u.lower()
                 name = u.split('/')[-1] or u.split('://')[-1] or u
-                import time as _t
-                t0 = _t.time()
+                t0 = time.time()
                 # HTTP/HTTPS：用 GET stream 验证可达性（HEAD 很多 IPTV 服务器不支持）
                 if low.startswith('http://') or low.startswith('https://'):
                     try:
                         # GET + Range（只读前 2KB，避免下载整个流）
-                        r = _requests.get(u, timeout=timeout, allow_redirects=True,
+                        r = _http_get(u, timeout=timeout, allow_redirects=True,
                                           headers={'User-Agent': 'IPTV-Scanner/1.0',
                                                    'Range': 'bytes=0-2047'},
                                           stream=True)
-                        latency = int((_t.time() - t0) * 1000)
+                        latency = int((time.time() - t0) * 1000)
                         status_code = r.status_code
                         # 2xx / 3xx / 206（Partial Content）视为可达
                         if status_code < 400:
@@ -186,7 +185,7 @@ class StandaloneScanner:
                             return (u, False, f'HTTP {status_code} 非媒体', latency, None)
                         return (u, False, f'HTTP {status_code}', latency, None)
                     except Exception as e:
-                        latency = int((_t.time() - t0) * 1000)
+                        latency = int((time.time() - t0) * 1000)
                         return (u, False, f'错误: {str(e)[:60]}', latency, None)
                 # RTSP：用 TCP socket 连接检查
                 if low.startswith('rtsp://'):
@@ -195,15 +194,17 @@ class StandaloneScanner:
                         host = parsed.hostname or ''
                         port = parsed.port or 554
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.settimeout(timeout)
-                        sock.connect((host, port))
-                        sock.close()
-                        latency = int((_t.time() - t0) * 1000)
-                        ch = {'name': name, 'url': u, 'group': '扫描结果', 'logo': '',
-                              'tvg_id': '', 'tvg_name': name, 'valid': True}
-                        return (u, True, 'RTSP 可达', latency, ch)
+                        try:
+                            sock.settimeout(timeout)
+                            sock.connect((host, port))
+                            latency = int((time.time() - t0) * 1000)
+                            ch = {'name': name, 'url': u, 'group': '扫描结果', 'logo': '',
+                                  'tvg_id': '', 'tvg_name': name, 'valid': True}
+                            return (u, True, 'RTSP 可达', latency, ch)
+                        finally:
+                            sock.close()
                     except Exception as e:
-                        latency = int((_t.time() - t0) * 1000)
+                        latency = int((time.time() - t0) * 1000)
                         return (u, False, f'RTSP: {str(e)[:40]}', latency, None)
                 # RTP/UDP：尝试加入组播组并接收数据包验证可达性
                 # 与 PC 端 ffprobe 验证效果类似：能收到数据则视为有效
@@ -220,9 +221,12 @@ class StandaloneScanner:
                         try:
                             # 组播地址（224.0.0.0 - 239.255.255.255）需要 join 才能接收
                             parts = host.split('.')
-                            is_multicast = (len(parts) == 4
-                                            and 224 <= int(parts[0]) <= 239
-                                            and all(0 <= int(p) <= 255 for p in parts))
+                            try:
+                                is_multicast = (len(parts) == 4
+                                                and 224 <= int(parts[0]) <= 239
+                                                and all(0 <= int(p) <= 255 for p in parts))
+                            except ValueError:
+                                is_multicast = False
                             if is_multicast:
                                 # IP_ADD_MEMBERSHIP：加入组播组
                                 mreq = socket.inet_aton(host) + socket.inet_aton('0.0.0.0')
@@ -231,7 +235,7 @@ class StandaloneScanner:
                             sock.bind(('', port))
                             # 尝试接收第一个数据包
                             data, addr = sock.recvfrom(2048)
-                            latency = int((_t.time() - t0) * 1000)
+                            latency = int((time.time() - t0) * 1000)
                             ch = {'name': name, 'url': u, 'group': '扫描结果', 'logo': '',
                                   'tvg_id': '', 'tvg_name': name, 'valid': True}
                             return (u, True, f'收到数据 {len(data)}B', latency, ch)
@@ -241,11 +245,11 @@ class StandaloneScanner:
                             except Exception:
                                 pass
                     except socket.timeout:
-                        latency = int((_t.time() - t0) * 1000)
+                        latency = int((time.time() - t0) * 1000)
                         # 超时未收到数据：不添加为频道（避免生成大量无效频道）
                         return (u, False, '超时无数据', latency, None)
                     except OSError as e:
-                        latency = int((_t.time() - t0) * 1000)
+                        latency = int((time.time() - t0) * 1000)
                         # 组播 join 失败/权限不足等：标记无效但不影响其他扫描
                         return (u, False, f'无法验证: {str(e)[:40]}', latency, None)
                 # 其他协议：标记为不支持
@@ -283,7 +287,9 @@ class StandaloneScanner:
                         self.stats['scanned'] = scanned_count
                         self.stats['valid'] = valid_count
                         self.stats['invalid'] = invalid_count
-                        self._scan_results = list(scan_results)  # 实时更新结果列表
+                        # 每 50 个结果或最后一批时才更新完整列表，避免 O(n²) 复制
+                        if scanned_count % 50 == 0 or scanned_count == len(all_urls):
+                            self._scan_results = list(scan_results)
                     if scanned_count % 10 == 0:
                         self.last_message = f'已扫描 {scanned_count}/{len(all_urls)}（有效 {valid_count}）'
 
@@ -401,7 +407,8 @@ class StandaloneScanner:
     def _validate_worker(self, timeout: int, threads: int):
         """频道验证工作线程"""
         try:
-            channels = list(self._ctx._channels)
+            with self._ctx._channels_lock:
+                channels = list(self._ctx._channels)
             with self._lock:
                 self.stats['total'] = len(channels)
             if not channels:
@@ -411,7 +418,7 @@ class StandaloneScanner:
             logger.info(f"频道验证：共 {len(channels)} 个频道")
 
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            import requests as _requests
+            from utils.http_session import get as _http_get
             import socket
             from urllib.parse import urlparse
             scanned_count = 0
@@ -427,7 +434,7 @@ class StandaloneScanner:
                     return (idx, False, 'URL 为空')
                 if low.startswith('http://') or low.startswith('https://'):
                     try:
-                        r = _requests.get(url, timeout=timeout, allow_redirects=True,
+                        r = _http_get(url, timeout=timeout, allow_redirects=True,
                                           headers={'User-Agent': 'IPTV-Scanner/1.0',
                                                    'Range': 'bytes=0-2047'},
                                           stream=True)
@@ -451,10 +458,12 @@ class StandaloneScanner:
                         host = parsed.hostname or ''
                         port = parsed.port or 554
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.settimeout(timeout)
-                        sock.connect((host, port))
-                        sock.close()
-                        return (idx, True, 'RTSP 可达')
+                        try:
+                            sock.settimeout(timeout)
+                            sock.connect((host, port))
+                            return (idx, True, 'RTSP 可达')
+                        finally:
+                            sock.close()
                     except Exception as e:
                         return (idx, False, f'RTSP: {str(e)[:40]}')
                 if low.startswith('rtp://') or low.startswith('udp://'):
@@ -574,8 +583,8 @@ class StandaloneScanner:
                 if not src_url or not source.get('enabled', True):
                     continue
                 try:
-                    import requests
-                    resp = requests.get(src_url, timeout=15, headers={'User-Agent': 'IPTV-Scanner/1.0'})
+                    from utils.http_session import get as _http_get
+                    resp = _http_get(src_url, timeout=15, headers={'User-Agent': 'IPTV-Scanner/1.0'})
                     content = load_m3u_from_url_data(resp.content)
                     channels, header_attrs = parse_m3u_content(content)
                     if channels:
@@ -633,15 +642,16 @@ class StandaloneScanner:
 
 class ServerContext:
     _instance = None
+    _instance_lock = threading.Lock()
 
     def __init__(self, main_window=None):
-        import threading as _threading
+
         self._main_window = main_window
         self._config: Optional[ConfigManager] = None
         self._channels: List[Dict] = []
-        self._channels_lock = _threading.Lock()
+        self._channels_lock = threading.Lock()
         self._sources: List[Dict] = []
-        self._sources_lock = _threading.Lock()
+        self._sources_lock = threading.Lock()
         self._epg_data: Dict = {}
         self._standalone = main_window is None
         self._last_load_time = 0.0
@@ -650,24 +660,25 @@ class ServerContext:
         # 订阅源加载状态（独立于扫描整理功能）
         self._source_loading = False
         self._source_load_status: Dict = {'loading': False, 'total': 0, 'loaded': 0, 'channels': 0, 'message': '空闲'}
-        self._source_load_lock = _threading.Lock()
+        self._source_load_lock = threading.Lock()
 
         if self._standalone:
             self._config = ConfigManager()
             self._standalone_scanner = StandaloneScanner(self)
             # 先从本地缓存加载频道（进程重启后立即可用，无需等待网络）
             self._load_channels_from_cache()
-            _threading.Thread(target=self._load_channels_from_file, daemon=True).start()
+            threading.Thread(target=self._load_channels_from_file, daemon=True).start()
             # 异步初始化 EPG 解析器（不依赖 PySide6）
-            _threading.Thread(target=self._init_epg_parser, daemon=True).start()
+            threading.Thread(target=self._init_epg_parser, daemon=True).start()
 
     @classmethod
     def get_instance(cls, main_window=None):
-        if cls._instance is None:
-            cls._instance = cls(main_window)
-        elif main_window is not None:
-            cls._instance._main_window = main_window
-            cls._instance._standalone = False
+        with cls._instance_lock:
+            if cls._instance is None:
+                cls._instance = cls(main_window)
+            elif main_window is not None:
+                cls._instance._main_window = main_window
+                cls._instance._standalone = False
         return cls._instance
 
     def _get_channels_cache_path(self) -> str:
@@ -730,8 +741,9 @@ class ServerContext:
                 if not url:
                     continue
                 try:
-                    import requests
-                    resp = requests.get(url, timeout=15)
+
+                    from utils.http_session import get as _http_get
+                    resp = _http_get(url, timeout=15)
                     content = load_m3u_from_url_data(resp.content)
                     channels, _ = parse_m3u_content(content)
                     if channels:
@@ -792,7 +804,6 @@ class ServerContext:
                 return False
             self._source_loading = True
             self._source_load_status = {'loading': True, 'total': 0, 'loaded': 0, 'channels': 0, 'message': '开始加载'}
-        import threading
         threading.Thread(target=self._reload_sources_worker, args=(url,), daemon=True).start()
         return True
 
@@ -839,8 +850,8 @@ class ServerContext:
                     self._source_load_status['loaded'] = idx + 1
                     self._source_load_status['message'] = f'加载中 {idx+1}/{len(sources)}'
                 try:
-                    import requests
-                    resp = requests.get(src_url, timeout=15, headers={'User-Agent': 'IPTV-Scanner/1.0'})
+                    from utils.http_session import get as _http_get
+                    resp = _http_get(src_url, timeout=15, headers={'User-Agent': 'IPTV-Scanner/1.0'})
                     if resp.status_code != 200:
                         err = f'HTTP {resp.status_code}'
                         errors.append(err)
@@ -1044,7 +1055,6 @@ class ServerContext:
         """重新加载 EPG 数据（添加 EPG 源后调用）"""
         if not self._standalone or not self._epg_parser:
             return False
-        import threading
         threading.Thread(target=self._load_epg_async, args=(self._epg_parser,), daemon=True).start()
         return True
 

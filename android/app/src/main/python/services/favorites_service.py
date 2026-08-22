@@ -2,7 +2,7 @@ import json
 import os
 import threading
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from core.log_manager import global_logger as logger
 from utils.platform_utils import get_android_data_dir
 
@@ -43,7 +43,9 @@ class FavoritesService:
                     try:
                         ch = json.loads(raw)
                         self._favorites.append(ch)
-                        self._favorites_url_set.add(ch.get('url', ''))
+                        url = ch.get('url', '')
+                        if url:
+                            self._favorites_url_set.add(url)
                     except (json.JSONDecodeError, ValueError) as e:
                         logger.warning(f"跳过损坏的收藏条目#{i}: {e}")
 

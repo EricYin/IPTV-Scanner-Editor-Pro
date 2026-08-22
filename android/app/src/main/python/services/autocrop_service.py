@@ -32,6 +32,7 @@ class AutoCropService:
         self.threshold = DEFAULT_BLACK_THRESHOLD
         # 是否正在分析（避免并发）
         self._analyzing = False
+        self._analyzing_lock = threading.Lock()
         # 最近一次裁剪参数
         self._last_crop = None
 
@@ -45,16 +46,19 @@ class AutoCropService:
         Args:
             done_callback: 可选回调，参数 (success: bool, crop: tuple|None, message: str)
         """
-        if self._analyzing:
-            if done_callback:
-                done_callback(False, None, '正在分析中')
-            return
+        with self._analyzing_lock:
+            if self._analyzing:
+                if done_callback:
+                    done_callback(False, None, '正在分析中')
+                return
+            self._analyzing = True
         pc = getattr(self.window, 'player_controller', None)
         if not pc or not pc.is_playing:
+            with self._analyzing_lock:
+                self._analyzing = False
             if done_callback:
                 done_callback(False, None, '当前无播放内容')
             return
-        self._analyzing = True
         t = threading.Thread(
             target=self._worker,
             args=(pc, done_callback),

@@ -1,5 +1,5 @@
 import os
-import time
+import json
 import ctypes
 import threading
 from PySide6.QtCore import QObject, Signal, QTimer
@@ -2288,6 +2288,9 @@ class MpvPlayerController(QObject):
                 return
 
             def _do_screenshot():
+                with self._lock:
+                    if self._terminated or self.mpv_handle is not handle:
+                        return
                 try:
                     from services.mpv_common import send_command as _async_send
                     _async_send(handle, ['screenshot-to-file', filepath, 'video'])
@@ -2401,7 +2404,7 @@ class MpvPlayerController(QObject):
             eof = self._get_mpv_property_string('eof-reached')
             if eof and eof.lower() == 'yes':
                 self.send_command(['stop'])
-                time.sleep(0.08)
+
         except Exception as _e:
             global_logger.debug(f"unexpected error: {_e}")
 
@@ -4082,6 +4085,12 @@ class MpvPlayerController(QObject):
             return self._playback_settings.get('http_proxy', '') or ''
         except Exception:
             return ''
+
+    def set_http_headers(self, headers: str):
+        try:
+            self._playback_settings['http_headers'] = headers or ''
+        except Exception as e:
+            self.logger.debug(f"设置 HTTP Headers 失败: {e}")
 
     def set_property_string(self, name, value):
         self._set_mpv_string(name, value)

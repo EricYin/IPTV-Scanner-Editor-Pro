@@ -326,10 +326,12 @@ class PresetManagerService:
 
 # 单例
 _instance = None
+_instance_lock = __import__('threading').Lock()
 
 
 def get_preset_manager(config_dir: str = '') -> PresetManagerService:
     global _instance
-    if _instance is None:
-        _instance = PresetManagerService(config_dir)
+    with _instance_lock:
+        if _instance is None:
+            _instance = PresetManagerService(config_dir)
     return _instance

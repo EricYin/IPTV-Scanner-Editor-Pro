@@ -1,6 +1,7 @@
 """用户友好的错误处理系统"""
 
 import functools
+import threading
 from PySide6 import QtWidgets
 from typing import Optional, Callable, Any, Dict
 from core.log_manager import global_logger as logger
@@ -211,21 +212,24 @@ class ErrorHandler:
 
 # 全局错误处理器实例
 _global_error_handler: Optional[ErrorHandler] = None
+_global_error_handler_lock = threading.Lock()
 
 
 def init_global_error_handler(parent_window: QtWidgets.QWidget) -> ErrorHandler:
     """初始化全局错误处理器"""
     global _global_error_handler
-    _global_error_handler = ErrorHandler(parent_window)
-    return _global_error_handler
+    with _global_error_handler_lock:
+        _global_error_handler = ErrorHandler(parent_window)
+        return _global_error_handler
 
 
 def get_global_error_handler() -> ErrorHandler:
     """获取全局错误处理器"""
     global _global_error_handler
-    if _global_error_handler is None:
-        raise RuntimeError("全局错误处理器未初始化，请先调用 init_global_error_handler")
-    return _global_error_handler
+    with _global_error_handler_lock:
+        if _global_error_handler is None:
+            raise RuntimeError("全局错误处理器未初始化，请先调用 init_global_error_handler")
+        return _global_error_handler
 
 
 def safe_execute_global(func: Callable, *args, **kwargs) -> Any:

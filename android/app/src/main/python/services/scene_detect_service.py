@@ -84,6 +84,7 @@ class SceneDetectService:
         self._callback = None
         self._interval = 5.0  # 检测间隔（秒）
         self._lock = threading.Lock()
+        self._player_controller = None
 
     @property
     def enabled(self) -> bool:

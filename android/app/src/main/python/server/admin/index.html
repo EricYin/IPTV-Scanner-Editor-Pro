@@ -1740,7 +1740,7 @@ function escHtml(s) {
   if (!s) return '';
   const d = document.createElement('div');
   d.textContent = s;
-  return d.innerHTML;
+  return d.innerHTML.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
 
 // ====== PUT 请求 ======
@@ -2641,7 +2641,7 @@ function renderEpgSearchResults() {
   html += '</tbody></table>';
   el.innerHTML = html;
 }
-function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
 
 // ====== 频道分组管理 ======
 async function loadGroupManagement() {
@@ -2830,7 +2830,7 @@ let _logWsReconnectTimer = null;
 function connectLogWebSocket() {
   if (_logWs) { try { _logWs.close(); } catch(_) {} }
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = proto + '//' + location.host + '/ws/logs';
+  const wsUrl = proto + '//' + location.host + '/ws/logs?token=' + encodeURIComponent(_AUTH_TOKEN);
   try {
     _logWs = new WebSocket(wsUrl);
     _logWs.onopen = function() {

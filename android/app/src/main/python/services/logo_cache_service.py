@@ -4,7 +4,7 @@ import time
 import json
 import threading
 from collections import OrderedDict
-from PySide6.QtCore import QObject, Signal, QUrl, QTimer, Qt, QBuffer, QIODevice, QThread
+from PySide6.QtCore import Signal, QUrl, QTimer, Qt
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PySide6.QtGui import QPixmap, QImage
 from utils.thread_safety import ThreadSafeQObject
@@ -404,7 +404,9 @@ class LogoCacheService(ThreadSafeQObject):
             if not self._warmup_queue:
                 break
             url = self._warmup_queue.pop(0)
-            if url and url not in self._image_cache and url not in self._negative_cache:
+            with self._lock:
+                in_cache = url in self._image_cache or url in self._negative_cache
+            if url and not in_cache:
                 cached = self.get(url)
                 if not cached:
                     self.fetch_async(url)

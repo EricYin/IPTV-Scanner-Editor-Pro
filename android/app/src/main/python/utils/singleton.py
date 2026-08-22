@@ -20,9 +20,9 @@ class Singleton:
     @classmethod
     def _get_class_lock(cls):
         """获取或创建类级别的锁，使不同 Singleton 子类互不阻塞"""
-        if not hasattr(cls, '_cls_lock'):
+        if '_cls_lock' not in cls.__dict__:
             with Singleton._global_lock:
-                if not hasattr(cls, '_cls_lock'):
+                if '_cls_lock' not in cls.__dict__:
                     cls._cls_lock = threading.Lock()
         return cls._cls_lock
 

@@ -118,7 +118,8 @@ class ChannelDedupService:
             merged = dict(ch1)
             for key in ('logo', 'logo_url', 'tvg_id', 'group', '_groups', 'catchup', 'catchup_days', 'catchup_source'):
                 if not merged.get(key) and ch2.get(key):
-                    merged[key] = ch2[key]
+                    val = ch2[key]
+                    merged[key] = list(val) if isinstance(val, list) else val
             result[i] = merged
             merged_indices.add(j)
         result = [ch for idx, ch in enumerate(result) if idx not in merged_indices]

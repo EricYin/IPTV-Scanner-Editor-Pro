@@ -29,7 +29,10 @@ class DnsPrefetcher(QObject):
             with self._lock:
                 if host in self._cache:
                     return
-            self._executor.submit(self._resolve, host)
+            try:
+                self._executor.submit(self._resolve, host)
+            except RuntimeError:
+                pass
         except Exception:
             pass
 
@@ -101,7 +104,10 @@ class ConnectionPreheater(QObject):
             with self._lock:
                 if cache_key in self._cache:
                     return
-            self._executor.submit(self._connect, host, port, cache_key)
+            try:
+                self._executor.submit(self._connect, host, port, cache_key)
+            except RuntimeError:
+                pass
         except Exception:
             pass
 

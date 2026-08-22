@@ -286,20 +286,21 @@ class BatchCommand(Command):
         return True
 
     def undo(self) -> bool:
-        # 按相反顺序撤销
+        all_ok = True
         for cmd in reversed(self._commands):
             try:
                 cmd.undo()
             except Exception as e:
+                all_ok = False
                 logger.error(f"BatchCommand undo 失败: {e}")
-                return False
-        return True
+        return all_ok
 
     def redo(self) -> bool:
+        all_ok = True
         for cmd in self._commands:
             try:
                 cmd.redo()
             except Exception as e:
+                all_ok = False
                 logger.error(f"BatchCommand redo 失败: {e}")
-                return False
-        return True
+        return all_ok

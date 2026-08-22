@@ -3,6 +3,7 @@ import sys
 import logging
 import time
 from typing import Any, Dict
+from utils.platform_utils import is_windows
 
 
 def get_display_channel_name(channel: Dict[str, Any], language_manager=None) -> str:
@@ -62,7 +63,7 @@ def get_resource_path(relative_path: str) -> str:
 
 def get_icon_path() -> str:
     if getattr(sys, 'frozen', False):
-        base_path = sys._MEIPASS
+        base_path = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
     else:
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if sys.platform == 'darwin':
@@ -179,6 +180,8 @@ def format_file_size(size_bytes: float) -> str:
     """格式化文件大小"""
     if size_bytes == 0:
         return "0 B"
+    if size_bytes < 0:
+        return f"{size_bytes:.2f} B"
 
     size_names = ["B", "KB", "MB", "GB", "TB"]
     i = 0
@@ -193,6 +196,8 @@ def truncate_text(text: str, max_length: int = 50, suffix: str = "...") -> str:
     """截断文本，超过最大长度时添加后缀"""
     if len(text) <= max_length:
         return text
+    if max_length <= len(suffix):
+        return suffix[:max_length]
     return text[:max_length - len(suffix)] + suffix
 
 
@@ -266,14 +271,15 @@ def retry_operation(operation, max_retries: int = 3, delay: float = 1.0, excepti
     Raises:
         Exception: 如果所有重试都失败
     """
-    for attempt in range(max_retries):
+    actual_retries = max(1, max_retries)
+    for attempt in range(actual_retries):
         try:
             return operation()
         except exceptions as e:
-            if attempt == max_retries - 1:
+            if attempt == actual_retries - 1:
                 raise
             time.sleep(delay)
-            logging.getLogger('utils').warning(f"操作失败，重试 {attempt + 1}/{max_retries}: {e}")
+            logging.getLogger('utils').warning(f"操作失败，重试 {attempt + 1}/{actual_retries}: {e}")
 
 
 def deep_merge_dicts(target: Dict, source: Dict) -> Dict:
@@ -330,26 +336,19 @@ def _ensure_prog_id(prog_id, app_name=None):
     try:
         if app_name is None:
             app_name = "ISEP"
-        key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{prog_id}", 0, winreg.KEY_WRITE)
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, app_name)
-        winreg.CloseKey(key)
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{prog_id}", 0, winreg.KEY_WRITE) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, app_name)
 
-        key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{prog_id}\\shell\\open\\command", 0, winreg.KEY_WRITE)
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, _get_exe_command())
-        winreg.CloseKey(key)
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{prog_id}\\shell\\open\\command", 0, winreg.KEY_WRITE) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, _get_exe_command())
 
-        key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{prog_id}\\DefaultIcon", 0, winreg.KEY_WRITE)
-        if getattr(sys, 'frozen', False):
-            # 打包模式：直接指向 exe 本体，Windows 会从 exe 中提取嵌入的图标
-            # 不能用 sys._MEIPASS（PyInstaller onefile 模式运行时解压的临时目录），
-            # 因为程序退出后 _MEIPASS 会被自动清理，注册表里的图标路径会变成死链
-            icon_path = sys.executable
-        else:
-            # 开发模式：用源码目录中的 logo.ico 文件
-            icon_path = get_icon_path()
-        if os.path.exists(icon_path):
-            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, icon_path)
-        winreg.CloseKey(key)
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{prog_id}\\DefaultIcon", 0, winreg.KEY_WRITE) as key:
+            if getattr(sys, 'frozen', False):
+                icon_path = sys.executable
+            else:
+                icon_path = get_icon_path()
+            if os.path.exists(icon_path):
+                winreg.SetValueEx(key, "", 0, winreg.REG_SZ, icon_path)
         return True
     except Exception as e:
         logging.warning(f"创建ProgID失败: {e}")
@@ -361,7 +360,7 @@ def _delete_prog_id(prog_id):
         import winreg
     except ImportError:
         return
-    for sub in [f"\\shell\\open\\command", f"\\shell\\open", f"\\shell", f"\\DefaultIcon", ""]:
+    for sub in ["\\shell\\open\\command", "\\shell\\open", "\\shell", "\\DefaultIcon", ""]:
         try:
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{prog_id}{sub}")
         except Exception:
@@ -377,7 +376,7 @@ def _notify_shell_change():
 
 
 def register_extension(ext: str) -> bool:
-    if sys.platform != 'win32':
+    if not is_windows():
         return False
     try:
         import winreg
@@ -389,9 +388,8 @@ def register_extension(ext: str) -> bool:
         return False
 
     try:
-        key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{ext}\\OpenWithProgids", 0, winreg.KEY_WRITE)
-        winreg.SetValueEx(key, prog_id, 0, winreg.REG_NONE, b"")
-        winreg.CloseKey(key)
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{ext}\\OpenWithProgids", 0, winreg.KEY_WRITE) as key:
+            winreg.SetValueEx(key, prog_id, 0, winreg.REG_NONE, b"")
     except Exception as e:
         logging.warning(f"注册 {ext} 文件关联失败: {e}")
         return False
@@ -401,7 +399,7 @@ def register_extension(ext: str) -> bool:
 
 
 def unregister_extension(ext: str) -> bool:
-    if sys.platform != 'win32':
+    if not is_windows():
         return False
     try:
         import winreg
@@ -411,9 +409,8 @@ def unregister_extension(ext: str) -> bool:
     prog_id = _get_prog_id_for_ext(ext)
 
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{ext}\\OpenWithProgids", 0, winreg.KEY_WRITE)
-        winreg.DeleteValue(key, prog_id)
-        winreg.CloseKey(key)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{ext}\\OpenWithProgids", 0, winreg.KEY_WRITE) as key:
+            winreg.DeleteValue(key, prog_id)
     except Exception:
         pass
 
@@ -423,7 +420,7 @@ def unregister_extension(ext: str) -> bool:
 
 
 def is_extension_registered(ext: str) -> bool:
-    if sys.platform != 'win32':
+    if not is_windows():
         return False
     try:
         import winreg
@@ -431,9 +428,8 @@ def is_extension_registered(ext: str) -> bool:
         return False
     prog_id = _get_prog_id_for_ext(ext)
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{ext}\\OpenWithProgids", 0, winreg.KEY_READ)
-        winreg.QueryValueEx(key, prog_id)
-        winreg.CloseKey(key)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"Software\\Classes\\{ext}\\OpenWithProgids", 0, winreg.KEY_READ) as key:
+            winreg.QueryValueEx(key, prog_id)
         return True
     except Exception:
         return False
@@ -483,8 +479,13 @@ def calculate_adaptive_delay(base_delay_ms: int = 200, min_delay_ms: int = 50, m
 
 def suppress_urllib3_warnings():
     """抑制 urllib3 SSL 警告"""
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    try:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    except ImportError:
+        pass
+    except Exception:
+        pass
     try:
         import logging as _logging
         _logging.getLogger('urllib3').setLevel(_logging.CRITICAL)

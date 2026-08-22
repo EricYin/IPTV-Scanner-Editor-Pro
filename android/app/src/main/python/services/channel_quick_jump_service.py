@@ -1,23 +1,21 @@
 from typing import Dict, Any, List, Optional, Tuple
-from core.log_manager import global_logger as logger
 
 
 class ChannelQuickJumpService:
     def __init__(self):
-        self._pypinyin_available = False
+        self._pypinyin = None
         try:
             import pypinyin
-            self._pypinyin_available = True
+            self._pypinyin = pypinyin
         except ImportError:
             pass
 
     def get_pinyin_initials(self, text: str) -> str:
         if not text:
             return ''
-        if self._pypinyin_available:
+        if self._pypinyin:
             try:
-                import pypinyin
-                initials = pypinyin.lazy_pinyin(text, style=pypinyin.Style.FIRST_LETTER)
+                initials = self._pypinyin.lazy_pinyin(text, style=self._pypinyin.Style.FIRST_LETTER)
                 return ''.join(initials).lower()
             except Exception:
                 pass

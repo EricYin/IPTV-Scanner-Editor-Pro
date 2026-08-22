@@ -266,7 +266,7 @@ def get_ffprobe_path():
     ffprobe_exe = os.path.join(ffprobe_dir, filename)
     if os.path.exists(ffprobe_exe):
         return ffprobe_exe
-    ffprobe_dir_alt = os.path.join(base_path, 'ffmpge')
+    ffprobe_dir_alt = os.path.join(base_path, 'ffmpeg')
     ffprobe_exe_alt = os.path.join(ffprobe_dir_alt, filename)
     if os.path.exists(ffprobe_exe_alt):
         return ffprobe_exe_alt

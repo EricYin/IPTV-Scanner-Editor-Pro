@@ -2,7 +2,6 @@ import re
 import threading
 import unicodedata
 from collections import OrderedDict
-from core.log_manager import global_logger
 
 _MAX_CACHE_SIZE = 5000
 
@@ -25,7 +24,7 @@ _COMMON_ALIASES = {
     'cctv15': 'CCTV-15 音乐',
     'cctv16': 'CCTV-16 奥林匹克',
     'cctv17': 'CCTV-17 农业农村',
-    'cctv5plus': 'CCTV-5+ 体育赛事',
+
     'cctv4k': 'CCTV-4K 超高清',
 }
 

@@ -117,10 +117,8 @@ def stop_server():
         return
     _server_started = False
     try:
-        if _server_runner:
-            loop = _server_loop
-            if loop and loop.is_running():
-                import asyncio
-                asyncio.run_coroutine_threadsafe(_server_runner.cleanup(), loop)
+        loop = _server_loop
+        if loop and loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
     except Exception as e:
         logging.getLogger('android_bridge').warning(f'stop_server 失败: {e}')

@@ -250,7 +250,7 @@ class MemoryManager(Singleton):
             }
 
             for pool_name, pool_info in self._object_pools.items():
-                in_use = pool_info.get('in_use', 0)
+                in_use = pool_info['created'] - len(pool_info['pool'])
                 max_sz = pool_info['max_size']
                 total_ops = pool_info['created'] + pool_info['reused']
                 stats['object_pools'][pool_name] = {

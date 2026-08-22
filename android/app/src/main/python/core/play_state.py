@@ -1,6 +1,6 @@
 import threading
 from enum import Enum, auto
-from typing import Optional, Callable
+from typing import Callable
 from core.log_manager import global_logger as logger
 
 

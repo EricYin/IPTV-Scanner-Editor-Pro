@@ -1,6 +1,4 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime
-from core.log_manager import global_logger as logger
 
 
 class EpgSearchService:

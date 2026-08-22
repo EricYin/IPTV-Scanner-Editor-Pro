@@ -9,12 +9,10 @@ from PySide6.QtCore import QObject, Signal
 from services.mpv_common import (
     MPV_EVENT_FILE_LOADED,
     MPV_EVENT_END_FILE,
-    MPV_EVENT_SHUTDOWN,
     create_mpv_handle,
     initialize_mpv,
     destroy_mpv,
     set_option_string as _mpv_set_option_string,
-    set_property_string as _mpv_set_property_string,
     send_command as _mpv_send_command,
     wait_for_specific_event,
     _is_mpv_available,
@@ -131,10 +129,12 @@ def _capture_single(url: str, timeout: int = 8, wid: int = 0, force: bool = Fals
 
             _mpv_send_command(handle, ['screenshot-to-file', thumb_path, 'video'])
 
-            time.sleep(0.5)
+            for _ in range(50):
+                if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
+                    return thumb_path
+                time.sleep(0.05)
 
-            if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
-                return thumb_path
+            return None
 
         return None
     except Exception:
@@ -161,6 +161,7 @@ class ThumbnailService(QObject):
 
     def capture_channels(self, channels: list, force: bool = False):
         added = False
+        need_start = False
         with self._lock:
             existing_urls = {url for _, url, _ in self._queue}
             for ch in channels:
@@ -178,9 +179,11 @@ class ThumbnailService(QObject):
                         self._queue.append((name, url, False))
                         existing_urls.add(url)
                         added = True
-        if added and not self._running:
-            self._stop_event.clear()
-            self._running = True
+            if added and not self._running:
+                self._stop_event.clear()
+                self._running = True
+                need_start = True
+        if need_start:
             self._thread = threading.Thread(target=self._worker, daemon=True)
             self._thread.start()
 
@@ -197,6 +200,7 @@ class ThumbnailService(QObject):
         while not self._stop_event.is_set():
             with self._lock:
                 if not self._queue:
+                    self._running = False
                     break
                 name, url, force = self._queue.popleft()
             try:
@@ -208,4 +212,4 @@ class ThumbnailService(QObject):
                         pass
             except Exception:
                 pass
-        self._running = False
+

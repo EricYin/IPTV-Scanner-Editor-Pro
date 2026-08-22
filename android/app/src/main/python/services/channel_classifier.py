@@ -252,10 +252,11 @@ class ChannelClassifier:
 
     def sort_classified(self, channels: list) -> list:
         category_order = self.get_category_order()
+        category_index = {cat: i for i, cat in enumerate(category_order)}
 
         def sort_key(ch):
             cat = ch.get('new_group', ch.get('group', ''))
-            cat_idx = category_order.index(cat) if cat in category_order else 99
+            cat_idx = category_index.get(cat, 99)
             return (cat_idx, ch.get('sort_key', ch.get('name', '')))
 
         return sorted(channels, key=sort_key)

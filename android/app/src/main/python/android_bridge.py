@@ -141,6 +141,8 @@ def _setup_android_paths(ext_files_dir='', files_dir='', native_lib_dir=''):
 
 def _migrate_old_data(app, files_dir, new_dir):
     """从旧目录迁移数据到新目录（仅当新目录为空时）"""
+    if not new_dir or not files_dir:
+        return
     try:
         import shutil
 
@@ -167,6 +169,7 @@ def _migrate_old_data(app, files_dir, new_dir):
             if new_files:
                 _log('_migrate_old_data: target dir not empty, skip migration')
                 return
+            failed_count = 0
             for item in old_files:
                 src = os.path.join(old_dir, item)
                 dst = os.path.join(new_dir, item)
@@ -177,13 +180,17 @@ def _migrate_old_data(app, files_dir, new_dir):
                         shutil.copy2(src, dst)
                 except Exception as e:
                     _log(f'_migrate_old_data: skip {item}: {e}')
-            _log(f'_migrate_old_data: migrated {len(old_files)} items from {old_dir}')
-            # 迁移成功后删除旧目录
-            try:
-                shutil.rmtree(old_dir)
-                _log(f'_migrate_old_data: removed old dir {old_dir}')
-            except Exception as e:
-                _log(f'_migrate_old_data: could not remove old dir {old_dir}: {e}')
+                    failed_count += 1
+            _log(f'_migrate_old_data: migrated {len(old_files) - failed_count}/{len(old_files)} items from {old_dir}')
+            # 仅当所有文件复制成功时才删除旧目录，避免数据丢失
+            if failed_count == 0:
+                try:
+                    shutil.rmtree(old_dir)
+                    _log(f'_migrate_old_data: removed old dir {old_dir}')
+                except Exception as e:
+                    _log(f'_migrate_old_data: could not remove old dir {old_dir}: {e}')
+            else:
+                _log(f'_migrate_old_data: {failed_count} files failed, keeping old dir {old_dir}', 'W')
             return  # 仅从一个来源迁移
     except Exception as e:
         _log(f'_migrate_old_data failed: {e}', 'W')
@@ -356,10 +363,12 @@ def _find_admin_dir():
 
 
 _server_started = False
+_server_loop = None
+_server_task = None
 
 
 def start_server(host='0.0.0.0', port=8080):
-    global _server_started
+    global _server_started, _server_loop, _server_task
     if _server_started:
         return
     _server_started = True
@@ -409,6 +418,7 @@ def start_server(host='0.0.0.0', port=8080):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    _server_loop = loop
     _log('event loop created')
 
     async def _run():
@@ -435,7 +445,8 @@ def start_server(host='0.0.0.0', port=8080):
             await runner.cleanup()
 
     try:
-        loop.run_until_complete(_run())
+        _server_task = loop.create_task(_run())
+        loop.run_until_complete(_server_task)
     except KeyboardInterrupt:
         pass
     except Exception as e:
@@ -444,6 +455,7 @@ def start_server(host='0.0.0.0', port=8080):
         raise
     finally:
         loop.close()
+        _server_loop = None
 
 
 def stop_server():
@@ -452,13 +464,20 @@ def stop_server():
     注意：此函数仅停止 start_server() 启动的服务器。
     start_admin_server() 启动的管理服务器用 stop_admin_server() 停止。
     """
-    global _server_started, _admin_loop
+    global _server_started, _server_loop, _server_task
     if not _server_started:
         return
     _server_started = False
-    # 如果有运行中的 event loop，通过取消 task 来停止
-    # start_server 使用 loop.run_until_complete，无法从外部取消
-    # 但 stop_admin_server 有完整的 task.cancel() 机制
+    try:
+        loop = _server_loop
+        if loop and loop.is_running():
+            if _server_task is not None:
+                loop.call_soon_threadsafe(_server_task.cancel)
+            else:
+                loop.call_soon_threadsafe(loop.stop)
+    except Exception as e:
+        _log(f'stop_server 失败: {e}', 'W')
+    _server_task = None
     _log('stop_server: server stop requested')
 
 
@@ -674,8 +693,8 @@ def get_status_json():
         return _err(str(e))
 
 
-def get_channels_json(page=1, size=100, group='', search='', valid_filter=''):
-    """频道分页列表。返回 {total, page, size, channels}"""
+def get_channels_json(page=1, size=100, group='', search='', valid_filter='', source_filter=''):
+    """频道分页列表。返回 {total, page, page_size, channels, groups}"""
     try:
         ctx = _get_ctx()
         if ctx is None:
@@ -687,27 +706,36 @@ def get_channels_json(page=1, size=100, group='', search='', valid_filter=''):
             filtered = [c for c in filtered if c.get('group', '') == group]
         if search:
             s = search.lower()
-            filtered = [c for c in filtered if s in (c.get('name', '') + c.get('url', '')).lower()]
+            filtered = [c for c in filtered if s in c.get('name', '').lower() or s in c.get('group', '').lower()]
         if valid_filter == 'valid':
             filtered = [c for c in filtered if c.get('valid') is True]
         elif valid_filter == 'invalid':
             filtered = [c for c in filtered if c.get('valid') is False]
+        if source_filter == 'local':
+            filtered = [c for c in filtered if not c.get('source', '')]
+        elif source_filter == 'sub':
+            filtered = [c for c in filtered if c.get('source', '')]
         total = len(filtered)
         # 分页
         page = max(1, int(page))
-        size = max(1, min(int(size), 5000))
+        size = max(1, min(int(size), 500))
         start = (page - 1) * size
         end = start + size
         page_channels = filtered[start:end]
-        # 去掉内部下划线字段（_raw_extinf / _all_tags 等不需要传到 Kotlin）
+        # 保留 _index 字段（server 端包含），去掉其他内部下划线字段
         clean = []
-        for c in page_channels:
-            clean.append({k: v for k, v in c.items() if not k.startswith('_')})
+        for i, c in enumerate(page_channels):
+            item = {k: v for k, v in c.items() if not k.startswith('_')}
+            item['_index'] = all_channels.index(c) if c in all_channels else start + i
+            clean.append(item)
+        # 分组列表（按首次出现顺序去重，与 server 端一致）
+        groups = list(dict.fromkeys(c.get('group', '') for c in all_channels if c.get('group')))
         return _ok({
             'total': total,
             'page': page,
-            'size': size,
+            'page_size': size,
             'channels': clean,
+            'groups': groups,
         })
     except Exception as e:
         return _err(str(e))
@@ -1169,13 +1197,40 @@ def get_epg_json(channel_name='', tvg_id='', tvg_name='', comma_name=''):
         for p in (programmes or []):
             if 'start_ts' not in p:
                 try:
-                    from datetime import datetime
+                    from datetime import datetime, timezone, timedelta
+                    import re as _re
                     start_str = p.get('start', '')
                     stop_str = p.get('stop', p.get('end', ''))
+                    def _parse_xmltv_time(s):
+                        if not s:
+                            return None
+                        s = s.strip()
+                        try:
+                            return datetime.fromisoformat(s)
+                        except (ValueError, TypeError):
+                            pass
+                        m = _re.match(r'^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?$', s)
+                        if m:
+                            y, mo, d, h, mi, se = (int(m.group(i)) for i in range(1, 7))
+                            tz_s = m.group(7)
+                            if tz_s:
+                                sign = 1 if tz_s[0] == '+' else -1
+                                tz = timezone(sign * timedelta(hours=int(tz_s[1:3]), minutes=int(tz_s[3:5])))
+                            else:
+                                tz = None
+                            try:
+                                return datetime(y, mo, d, h, mi, se, tzinfo=tz)
+                            except ValueError:
+                                return None
+                        return None
                     if start_str:
-                        p['start_ts'] = int(datetime.fromisoformat(start_str).timestamp())
+                        dt = _parse_xmltv_time(start_str)
+                        if dt:
+                            p['start_ts'] = int(dt.timestamp())
                     if stop_str:
-                        p['stop_ts'] = int(datetime.fromisoformat(stop_str).timestamp())
+                        dt = _parse_xmltv_time(stop_str)
+                        if dt:
+                            p['stop_ts'] = int(dt.timestamp())
                 except Exception:
                     pass
         return _ok({
@@ -1378,13 +1433,15 @@ def batch_edit_channels(action, options_json='{}'):
                 return _err('台标匹配模块不可用')
             overwrite = bool(options.get('overwrite', False))
             matcher = LogoMatcher()
+            matched = 0
             for i, ch in enumerate(channels):
                 if not overwrite and ch.get('logo'):
                     continue
                 logo = matcher.match(ch.get('name', ''))
                 if logo:
                     channels[i]['logo'] = logo
-                    changed += 1
+                    matched += 1
+            changed = matched
 
         elif action == 'assign_fields':
             action_key = options.get('action_key', '')
@@ -1415,19 +1472,50 @@ def batch_edit_channels(action, options_json='{}'):
                         continue
                     channels[i]['tvg_id'] = name
                     changed += 1
+                elif action_key == 'name2tvg_id':
+                    if not (only_empty and ch.get('tvg_id')):
+                        channels[i]['tvg_id'] = name
+                        changed += 1
+                elif action_key == 'tvg_id2name':
+                    if ch.get('tvg_id') and not (only_empty and ch.get('name')):
+                        channels[i]['name'] = ch.get('tvg_id', '')
+                        changed += 1
+                elif action_key == 'tvg_name2name':
+                    tvg_name = ch.get('tvg_name', '')
+                    if tvg_name and not (only_empty and ch.get('name')):
+                        channels[i]['name'] = tvg_name
+                        changed += 1
+                elif action_key == 'tvg_id2tvg_chno':
+                    if ch.get('tvg_id') and not (only_empty and ch.get('tvg_chno')):
+                        channels[i]['tvg_chno'] = ch.get('tvg_id', '')
+                        changed += 1
 
         elif action == 'clear_params':
             fields = options.get('fields', [])
             if not fields:
                 return _err('fields 不能为空')
             for i, ch in enumerate(channels):
+                modified = False
                 for f in fields:
                     if ch.get(f):
                         channels[i][f] = ''
-                        changed += 1
+                        modified = True
+                if modified:
+                    changed += 1
 
         elif action == 'sort_by_group':
-            channels.sort(key=lambda c: (c.get('group', '未分组'), c.get('name', '')))
+            try:
+                from services.channel_classifier import ChannelClassifier
+                classifier = ChannelClassifier()
+                category_order = classifier.get_category_order()
+            except ImportError:
+                category_order = []
+            category_index = {cat: i for i, cat in enumerate(category_order)}
+            def _sort_key(c):
+                group = c.get('group', '')
+                cat_idx = category_index.get(group, 99) if category_index else 0
+                return (cat_idx, c.get('name', ''))
+            channels.sort(key=_sort_key)
             changed = total
 
         else:
@@ -1438,7 +1526,10 @@ def batch_edit_channels(action, options_json='{}'):
             ctx._save_channels_to_cache()
 
         _log(f'batch_edit_channels: action={action}, changed={changed}/{total}')
-        return _ok({'changed': changed, 'total': total})
+        result = {'changed': changed, 'total': total}
+        if action == 'match_logo':
+            result['matched'] = changed
+        return _ok(result)
     except Exception as e:
         return _err(str(e))
 
@@ -1777,6 +1868,7 @@ def generate_thumbnail_bg(url):
 
             if not initialize_mpv(handle):
                 destroy_mpv(handle)
+                handle = None
                 return _err('failed to initialize mpv')
 
             # 加载 URL
@@ -1847,6 +1939,7 @@ _admin_loop = None
 # 让 _run() 的 finally 块执行 runner.cleanup() 释放 socket；
 # 而 loop.stop() 会跳过 finally 导致 socket 泄漏 → 下次 bind 失败）
 _admin_server_task = None
+_admin_server_lock = _threading.Lock()
 
 
 def set_admin_token(token=''):
@@ -1857,9 +1950,10 @@ def set_admin_token(token=''):
     注意：仅在服务器未运行时生效。
     """
     global _admin_auth_token
-    if _admin_server_running:
-        return _err('服务器运行中，请先停止后再修改令牌')
-    _admin_auth_token = token.strip()
+    with _admin_server_lock:
+        if _admin_server_running:
+            return _err('服务器运行中，请先停止后再修改令牌')
+        _admin_auth_token = token.strip()
     if _admin_auth_token:
         _log(f'Admin server token set to custom: {_admin_auth_token}')
     else:
@@ -1913,9 +2007,9 @@ def start_admin_server(port=8080):
         return _err(f'获取局域网 IP 失败: {e}')
 
     # 生成认证 token（首次启动时生成，之后复用）
-    # 4 位数字令牌，方便 PC 浏览器手动输入
+    # 6 位字母数字令牌，平衡安全性与手动输入便利性
     if not _admin_auth_token:
-        _admin_auth_token = f'{secrets.randbelow(10000):04d}'
+        _admin_auth_token = secrets.token_urlsafe(6)
         _log(f'Admin server auth token generated: {_admin_auth_token}')
 
     def _run_server():
@@ -1927,7 +2021,14 @@ def start_admin_server(port=8080):
             from server.app import get_server
             from aiohttp import web
 
+            # 同步 admin token 到 server.routes，避免双重认证冲突
+            import server.routes as _srv_routes
+            _srv_routes._AUTH_TOKEN = _admin_auth_token
+
             app = create_app()
+
+            # 移除 server.routes 的 auth_middleware，由 _auth_middleware 统一处理
+            app.middlewares = [m for m in app.middlewares if m.__name__ != 'auth_middleware']
 
             # 注册认证中间件：所有 /api/ 路由需要携带有效 token
             # 静态文件路由（/admin/ /）免认证，页面加载后由前端 JS 在 API 请求中携带 token
@@ -1944,7 +2045,7 @@ def start_admin_server(port=8080):
                     return await handler(request)
                 # 从 Header 或 query 参数获取 token
                 token = request.headers.get('X-Auth-Token', '') or request.query.get('token', '')
-                if token != _admin_auth_token:
+                if not secrets.compare_digest(token, _admin_auth_token):
                     return web.json_response(
                         {'error': 'Unauthorized', 'message': '请通过应用端获取访问令牌'},
                         status=401
@@ -1960,10 +2061,19 @@ def start_admin_server(port=8080):
                 _log('Admin server: admin dir not found', 'W')
 
             # 注册虚拟遥控器路由
+            _ALLOWED_REMOTE_CMDS = frozenset({
+                'up', 'down', 'left', 'right', 'ok', 'back', 'menu',
+                'play', 'pause', 'play_pause', 'stop', 'mute',
+                'vol_up', 'vol_down', 'seek_forward', 'seek_backward',
+                'osd', 'prev_channel', 'next_channel',
+            })
+
             async def _handle_remote(request):
                 cmd = request.match_info.get('cmd', '')
                 if not cmd:
                     return web.json_response({'success': False, 'error': 'missing cmd'})
+                if cmd not in _ALLOWED_REMOTE_CMDS:
+                    return web.json_response({'success': False, 'error': 'invalid cmd'}, status=400)
                 push_remote_command(cmd)
                 return web.json_response({'success': True, 'cmd': cmd})
 
@@ -1980,7 +2090,10 @@ def start_admin_server(port=8080):
             # 注册 logcat 日志查看路由（供 admin 日志页面查看 Kotlin/Android 端日志）
             async def _handle_logcat_view(request):
                 import subprocess
-                lines = min(int(request.query.get('lines', 200)), 2000)
+                try:
+                    lines = max(1, min(int(request.query.get('lines', 200)), 2000))
+                except (ValueError, TypeError):
+                    lines = 200
                 try:
                     # 获取当前应用 PID
                     pid_result = subprocess.run(
@@ -2014,7 +2127,7 @@ def start_admin_server(port=8080):
             # 注册音量控制路由（供 admin 遥控器页面通过 HTTP 控制音量）
             async def _handle_set_volume(request):
                 data = await request.json()
-                vol = int(data.get('volume', 100))
+                vol = max(0, min(int(data.get('volume', 100)), 100))
                 push_remote_command(f'set_volume:{vol}')
                 return web.json_response({'success': True, 'volume': vol})
 
@@ -2064,8 +2177,9 @@ def start_admin_server(port=8080):
                 _admin_server_running = True
                 # 同步标记 IPTVServer 为运行中，使 /api/status 返回 running（管理页面状态显示正确）
                 svr = get_server()
-                svr._running = True
-                svr._start_time = time.time()
+                if svr:
+                    svr._running = True
+                    svr._start_time = time.time()
                 _log(f'Admin server running at {_admin_server_url} (port={actual_port})')
                 try:
                     while True:
@@ -2080,7 +2194,8 @@ def start_admin_server(port=8080):
                     _admin_server_running = False
                     # 同步标记 IPTVServer 为已停止
                     svr = get_server()
-                    svr._running = False
+                    if svr:
+                        svr._running = False
 
             # 用 task 模式：保存 task 引用，外部用 task.cancel() 优雅取消
             # task.cancel() 触发 CancelledError → _run() 的 except 捕获 → finally 执行 runner.cleanup()

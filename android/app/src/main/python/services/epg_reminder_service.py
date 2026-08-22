@@ -138,9 +138,14 @@ class EpgReminderService:
         now = datetime.now()
         with self._lock:
             before = len(self._reminders)
-            self._reminders = [
-                r for r in self._reminders
-                if datetime.fromisoformat(r.get('end_time', r.get('start_time', ''))) > now - timedelta(hours=1)
-            ]
+            new_reminders = []
+            for r in self._reminders:
+                try:
+                    end = datetime.fromisoformat(r.get('end_time', r.get('start_time', '')))
+                    if end > now - timedelta(hours=1):
+                        new_reminders.append(r)
+                except (ValueError, TypeError):
+                    new_reminders.append(r)
+            self._reminders = new_reminders
             if len(self._reminders) != before:
                 self._save_to_config()

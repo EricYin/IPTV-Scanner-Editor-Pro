@@ -146,6 +146,10 @@ class PanelVisibilityManager:
         with self._lock:
             self._auto_hide_saved = {p: self._visible[p] for p in self.PANELS}
 
+    def snapshot_auto_hide_saved(self) -> Dict[str, bool]:
+        with self._lock:
+            return dict(self._auto_hide_saved or {})
+
     def restore_auto_hide_state(self, is_local_file: bool = False):
         with self._lock:
             saved = dict(self._auto_hide_saved)
