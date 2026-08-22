@@ -46,7 +46,7 @@ class MediaController:
             menu.addAction(tr("ctx_prev_channel", "Previous Channel"), lambda *a: self.window.event_handler._switch_channel(-1))
             menu.addAction(tr("ctx_next_channel", "Next Channel"), lambda *a: self.window.event_handler._switch_channel(1))
 
-        menu.addSeparator()
+            menu.addSeparator()
 
         # ---- 倍速/音量/比例 子菜单 ----
         speed_menu = menu.addMenu(tr("ctx_speed", "Speed"))
@@ -135,7 +135,8 @@ class MediaController:
         menu.addSeparator()
 
         menu.addAction(tr("ctx_fullscreen", "Fullscreen\tF11"), lambda *a: self.window.toggle_fullscreen())
-        menu.addAction(tr("ctx_pip", "Picture-in-Picture\tP"), lambda *a: self.window.pip_ctrl.toggle())
+        pip_action = menu.addAction(tr("ctx_pip", "Picture-in-Picture\tP"), lambda *a: self.window.pip_ctrl.toggle())
+        pip_action.setEnabled(is_playing)
 
         menu.addSeparator()
 

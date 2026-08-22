@@ -243,6 +243,11 @@ class FavoritesController:
         tr = w.language_manager.tr
         item = list_widget.itemAt(pos)
         if not item:
+            menu = QMenu(list_widget)
+            menu.setStyleSheet(self._get_menu_style())
+            menu.addAction(tr('ctx_add_channel', '添加频道'), lambda: self._add_channel_from_url(source))
+            menu.addAction(tr('ctx_refresh_list', '刷新列表'), lambda: self._refresh_channel_list(source))
+            menu.exec(list_widget.mapToGlobal(pos))
             return
 
         idx = item.data(Qt.ItemDataRole.UserRole)
@@ -387,6 +392,12 @@ class FavoritesController:
 
                 menu.addSeparator()
 
+                # 添加到本地列表
+                add_local_action = menu.addAction(tr('add_to_local', '添加到本地列表'))
+                add_local_action.triggered.connect(lambda: self._add_to_local_from_channel(channel))
+
+                menu.addSeparator()
+
                 # 复制
                 copy_name_action = menu.addAction(tr('copy_channel_name', '复制频道名称'))
                 copy_name_action.triggered.connect(lambda: self._copy_text(channel.get('name', '')))
@@ -430,6 +441,15 @@ class FavoritesController:
                 # 删除单条历史
                 del_action = menu.addAction(tr('remove_from_history', '删除此历史记录'))
                 del_action.triggered.connect(lambda: self._do_remove_history(channel.get('url', '')))
+
+                menu.addSeparator()
+
+                # 加入收藏
+                fav_action = menu.addAction(tr('add_to_favorites', '加入收藏'))
+                fav_action.triggered.connect(lambda: self._add_to_favorites_from_channel(channel))
+                # 添加到本地列表
+                add_local_action = menu.addAction(tr('add_to_local', '添加到本地列表'))
+                add_local_action.triggered.connect(lambda: self._add_to_local_from_channel(channel))
 
                 menu.addSeparator()
 
@@ -500,6 +520,14 @@ class FavoritesController:
         channels = getattr(w, '_local_channels', None) or []
         if not isinstance(idx, int) or idx < 0 or idx >= len(channels):
             return
+        tr = w.language_manager.tr
+        name = channels[idx].get('name', '')
+        from PySide6.QtWidgets import QMessageBox
+        if QMessageBox.question(w, tr('confirm_delete', '确认删除'),
+                tr('confirm_delete_channel', '确定删除频道') + f' "{name}"?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
         removed = channels.pop(idx)
         w._local_channels_dirty = True
         w._update_groups_for('local')
@@ -507,25 +535,83 @@ class FavoritesController:
             w.local_channel_list, w._local_channels,
             w.local_group_combo.currentText()
         )
-        tr = w.language_manager.tr
-        name = removed.get('name', '')
         w.status_bar_show_message(tr('channel_deleted', '频道已删除') + f': {name}')
 
     def _do_clear_history(self):
         if not self._service:
             return
+        tr = self.window.language_manager.tr
+        from PySide6.QtWidgets import QMessageBox
+        if QMessageBox.question(self.window, tr('confirm_clear', '确认清空'),
+                tr('confirm_clear_history', '确定清空所有播放历史？此操作不可撤销。'),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
         self._service.clear_play_history()
         self.populate_history_tab()
-        tr = self.window.language_manager.tr
         self.window.status_bar_show_message(tr('history_cleared', '历史已清空'))
 
     def _do_clear_favorites(self):
         if not self._service:
             return
+        tr = self.window.language_manager.tr
+        from PySide6.QtWidgets import QMessageBox
+        if QMessageBox.question(self.window, tr('confirm_clear', '确认清空'),
+                tr('confirm_clear_favorites', '确定清空所有收藏？此操作不可撤销。'),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
         self._service.clear_favorites()
         self.populate_favorites_tab()
-        tr = self.window.language_manager.tr
         self.window.status_bar_show_message(tr('favorites_cleared', '收藏已清空'))
+
+    def _add_channel_from_url(self, source):
+        """从URL添加频道到本地列表"""
+        from PySide6.QtWidgets import QInputDialog
+        tr = self.window.language_manager.tr
+        url, ok = QInputDialog.getText(self.window, tr('add_channel', '添加频道'),
+            tr('enter_channel_url', '请输入频道URL:'))
+        if ok and url.strip():
+            ch = {'name': url.strip().split('/')[-1] or url.strip(), 'url': url.strip(),
+                  'group': tr('uncategorized', '未分类'), 'valid': None, 'source': ''}
+            self.window._local_channels.append(ch)
+            self.window._local_channels_dirty = True
+            self.window._update_groups_for('local')
+            self.window._populate_channel_list_for(
+                self.window.local_channel_list, self.window._local_channels,
+                self.window.local_group_combo.currentText())
+            self.window.status_bar_show_message(tr('channel_added', '频道已添加'))
+
+    def _refresh_channel_list(self, source):
+        """刷新频道列表"""
+        if source == 'subscription':
+            self.window._populate_channel_list_for(
+                self.window.sub_channel_list, self.window._sub_channels,
+                self.window.sub_group_combo.currentText())
+        else:
+            self.window._populate_channel_list_for(
+                self.window.local_channel_list, self.window._local_channels,
+                self.window.local_group_combo.currentText())
+
+    def _add_to_favorites_from_channel(self, channel):
+        """从频道信息加入收藏"""
+        if self._service:
+            self._service.add_favorite(channel)
+            self.populate_favorites_tab()
+            tr = self.window.language_manager.tr
+            self.window.status_bar_show_message(tr('added_to_favorites', '已加入收藏'))
+
+    def _add_to_local_from_channel(self, channel):
+        """从频道信息添加到本地列表"""
+        ch = {**channel, 'source': ''}
+        self.window._local_channels.append(ch)
+        self.window._local_channels_dirty = True
+        self.window._update_groups_for('local')
+        self.window._populate_channel_list_for(
+            self.window.local_channel_list, self.window._local_channels,
+            self.window.local_group_combo.currentText())
+        tr = self.window.language_manager.tr
+        self.window.status_bar_show_message(tr('added_to_local', '已添加到本地列表'))
 
     def _get_menu_style(self):
         from ui.styles import AppStyles
