@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 
-from PySide6.QtCore import Qt
 from core.log_manager import global_logger as logger
 
 
@@ -148,7 +147,7 @@ class ProgressMixin:
             self._slider_debounce_timer.stop()
         else:
             from PySide6.QtCore import QTimer
-            self._slider_debounce_timer = QTimer()
+            self._slider_debounce_timer = QTimer(self)
             self._slider_debounce_timer.setSingleShot(True)
             self._slider_debounce_timer.timeout.connect(self._do_progress_slider_released)
         self._slider_debounce_timer.start(self.SLIDER_DEBOUNCE_MS)

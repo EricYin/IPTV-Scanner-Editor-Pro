@@ -1,6 +1,7 @@
 import sys
 
 from core.log_manager import global_logger as logger
+from utils.thread_safety import safe_single_shot
 
 
 class EventMixin:
@@ -118,9 +119,8 @@ class EventMixin:
 
     def leaveEvent(self, event):
         """鼠标离开窗口"""
-        from PySide6.QtCore import QTimer
         if self.pip_mode:
-            QTimer.singleShot(50, self.pip_ctrl.delayed_hide_overlay)
+            safe_single_shot(50, self, self.pip_ctrl.delayed_hide_overlay)
         elif not getattr(self, '_floating_hidden', False) and not getattr(self, 'is_fullscreen', False):
-            QTimer.singleShot(50, self._delayed_hide_floating_panels)
+            safe_single_shot(50, self, self._delayed_hide_floating_panels)
         super().leaveEvent(event)

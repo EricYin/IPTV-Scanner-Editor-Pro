@@ -1,7 +1,7 @@
 import os
 import copy
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from core.log_manager import global_logger as logger
 from core.application_state import app_state
@@ -28,6 +28,8 @@ class FileOpsMixin:
 
     def _apply_m3u_content(self, content, file_path):
         tr = self.language_manager.tr
+        _unnamed = tr('unnamed', '未命名')
+        _uncategorized = tr('uncategorized', '未分类')
         try:
             if self.channel_model.load_from_file(content):
                 self.channel_model._source_file_path = file_path
@@ -35,11 +37,11 @@ class FileOpsMixin:
                 for i, ch in enumerate(self.channel_model.channels):
                     new_channels.append({
                         "id": i + 1,
-                        "name": ch.get('name', '未命名'),
+                        "name": ch.get('name', _unnamed),
                         "url": ch.get('url', ''),
                         "logo": ch.get('logo', ''),
-                        "group": ch.get('group', '未分类'),
-                        "_groups": ch.get('_groups', [ch.get('group', '未分类')]),
+                        "group": ch.get('group', _uncategorized),
+                        "_groups": ch.get('_groups', [ch.get('group', _uncategorized)]),
                         "tvg_id": ch.get('tvg_id', ''),
                         "tvg_chno": ch.get('tvg_chno', ''),
                         "tvg_shift": ch.get('tvg_shift', ''),
@@ -67,7 +69,7 @@ class FileOpsMixin:
                 self.status_bar.showMessage(f"{tr('file_opened', 'File opened')}: {file_path}")
                 logger.info(f"成功打开最近文件: {file_path}, 共 {app_state.channel_count} 个频道")
             else:
-                self.status_bar.showMessage(tr("file_format_error") or '')
+                self.status_bar.showMessage(tr("file_format_error", "文件格式错误") or '')
         except Exception as ex:
             logger.error(f"应用M3U内容失败: {str(ex)}")
             self.status_bar.showMessage(f"{tr('file_open_failed', 'Failed to open file')}: {str(ex)}")
@@ -112,13 +114,24 @@ class FileOpsMixin:
             audio_exts = ('.mp3', '.flac', '.wav', '.aac', '.ogg', '.opus', '.wma', '.m4a', '.ape', '.alac', '.wv', '.tta', '.dts', '.ac3', '.mid', '.midi')
             media_exts = video_exts + audio_exts
             video_files = []
+            list_error = None
             try:
                 for f in os.listdir(path):
                     if f.lower().endswith(media_exts):
                         video_files.append(os.path.join(path, f))
                 video_files.sort(key=lambda x: x.lower())
+            except PermissionError:
+                list_error = 'permission'
             except Exception:
                 pass
+
+            if list_error == 'permission':
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self, tr("open_video", "打开视频"),
+                    tr("no_permission_folder", "无权限访问该文件夹"),
+                )
+                return
 
             if not video_files:
                 from PySide6.QtWidgets import QMessageBox
@@ -128,7 +141,7 @@ class FileOpsMixin:
                 )
                 return
 
-            folder_name = os.path.basename(path) or os.path.split(path)[-1] or "视频"
+            folder_name = os.path.basename(path) or os.path.split(path)[-1] or tr('video', '视频')
             for vf in video_files:
                 name = os.path.splitext(os.path.basename(vf))[0]
                 channel = {
@@ -173,7 +186,7 @@ class FileOpsMixin:
         )
         for i in range(self.local_channel_list.count()):
             item = self.local_channel_list.item(i)
-            if item and item.data(256) == new_idx:
+            if item and item.data(Qt.ItemDataRole.UserRole) == new_idx:
                 self.local_channel_list.setCurrentItem(item)
                 break
         self.current_channel = channel

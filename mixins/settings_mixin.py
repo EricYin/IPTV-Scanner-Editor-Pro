@@ -1,3 +1,4 @@
+
 from core.log_manager import global_logger as logger
 from ui.styles import AppStyles
 

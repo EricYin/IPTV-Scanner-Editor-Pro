@@ -1,10 +1,13 @@
-from core.log_manager import global_logger as logger
-from utils.platform_utils import is_macos
+from utils.platform_utils import is_macos, is_android
 
 
 class TrayMixin:
 
     def _setup_system_tray(self):
+        if is_android():
+            self._system_tray = None
+            self._is_hidden_to_tray = False
+            return
         from PySide6.QtWidgets import QSystemTrayIcon, QMenu
         from PySide6.QtGui import QIcon
         import os
@@ -25,6 +28,17 @@ class TrayMixin:
         tr = self.language_manager.tr
         show_action = tray_menu.addAction(tr('tray_show', '显示主窗口'))
         show_action.triggered.connect(self._tray_show_window)
+        tray_menu.addSeparator()
+
+        play_pause_action = tray_menu.addAction(tr('tray_play_pause', '播放/暂停'))
+        play_pause_action.triggered.connect(self._tray_play_pause)
+        prev_ch_action = tray_menu.addAction(tr('tray_prev', '上一频道'))
+        prev_ch_action.triggered.connect(self._tray_prev_channel)
+        next_ch_action = tray_menu.addAction(tr('tray_next', '下一频道'))
+        next_ch_action.triggered.connect(self._tray_next_channel)
+        mute_action = tray_menu.addAction(tr('tray_mute', '静音'))
+        mute_action.triggered.connect(self._tray_toggle_mute)
+
         tray_menu.addSeparator()
         quit_action = tray_menu.addAction(tr('tray_quit', '退出程序'))
         quit_action.triggered.connect(self._tray_quit)
@@ -52,6 +66,26 @@ class TrayMixin:
         self._force_quit = True
         self._is_hidden_to_tray = False
         self.close()
+
+    def _tray_play_pause(self):
+        pc = getattr(self, 'player_controller', None)
+        if pc:
+            if pc.is_playing and not pc.is_paused:
+                pc.pause()
+            else:
+                pc.play()
+
+    def _tray_prev_channel(self):
+        if hasattr(self, '_switch_channel'):
+            self._switch_channel(-1)
+
+    def _tray_next_channel(self):
+        if hasattr(self, '_switch_channel'):
+            self._switch_channel(1)
+
+    def _tray_toggle_mute(self):
+        if hasattr(self, 'toggle_mute'):
+            self.toggle_mute()
 
     def _do_close_minimize_tray(self):
         tr = self.language_manager.tr

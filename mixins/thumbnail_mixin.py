@@ -1,7 +1,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtWidgets import QListWidget
-from core.log_manager import global_logger as logger
 
 
 class ThumbnailMixin:

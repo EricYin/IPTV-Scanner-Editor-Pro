@@ -4,7 +4,6 @@ from PySide6.QtWidgets import QMenu
 from datetime import datetime
 
 from ui.styles import AppStyles
-from core.log_manager import global_logger as logger
 
 
 class EpgMixin:
@@ -49,7 +48,7 @@ class EpgMixin:
                         supports_catchup = True
                 except Exception:
                     pass
-            if start_dt < now and self.current_channel and supports_catchup:
+            if end_dt < now and self.current_channel and supports_catchup:
                 catchup_action = QAction(tr('menu_catchup', '回看'), menu)
                 catchup_action.triggered.connect(lambda: self.catchup_ctrl.start_catchup(program))
                 menu.addAction(catchup_action)

@@ -1,11 +1,14 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QToolButton, QComboBox, QDockWidget, QButtonGroup,
-    QListWidget, QPushButton,
+    QListWidget, QPushButton, QTabWidget, QSizePolicy, QLineEdit,
 )
-from PySide6 import QtWidgets
 from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QIcon
+try:
+    from shiboken6 import isValid as _shiboken_isvalid
+except ImportError:
+    _shiboken_isvalid = None
 
 from core.log_manager import global_logger as logger
 from core.application_state import app_state
@@ -80,6 +83,7 @@ class PlaylistPanelMixin:
         self.epg_layout.addLayout(date_layout)
 
         self.epg_content = QListWidget()
+        self.epg_content.setToolTip(tr('epg_content_tooltip', '节目单列表，双击可播放对应频道'))
         self.epg_content.setStyleSheet(AppStyles.player_list_style())
         self.epg_content.setSpacing(2)
         self.epg_content.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -100,7 +104,7 @@ class PlaylistPanelMixin:
         from ui.floating_dialog import FloatingDockWidget
         self.epg_dock = FloatingDockWidget(tr("epg_title", "Program Guide"), self)
         self.epg_dock.setWidget(epg_container)
-        self.epg_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
+        self.epg_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable | QDockWidget.DockWidgetFeature.DockWidgetMovable | QDockWidget.DockWidgetFeature.DockWidgetFloatable)
         self.epg_dock.setObjectName("epg_dock")
         if hasattr(self, 'epg_panel'):
             self.epg_panel = None
@@ -123,14 +127,14 @@ class PlaylistPanelMixin:
         playlist_container.setStyleSheet("background-color: transparent;")
         playlist_container.setMinimumWidth(200)
         self.playlist_layout = QVBoxLayout(playlist_container)
-        self.playlist_layout.setContentsMargins(6, 6, 6, 6)
+        self.playlist_layout.setContentsMargins(8, 8, 8, 8)
 
         self.playlist_title = QLabel(tr('playlist_title', 'Playlist'))
         self.playlist_title.setStyleSheet(AppStyles.player_playlist_title_style())
         self.playlist_layout.addWidget(self.playlist_title)
 
         self._create_playlist_tab_buttons(tr)
-        self.playlist_tab = QtWidgets.QTabWidget()
+        self.playlist_tab = QTabWidget()
         self.playlist_tab.setStyleSheet(AppStyles.player_tab_style())
         self.playlist_tab.tabBar().hide()
 
@@ -151,7 +155,7 @@ class PlaylistPanelMixin:
         self.group_combo = self.sub_group_combo
         self.channel_empty_label = self.sub_empty_label
 
-        self._click_timer = QTimer()
+        self._click_timer = QTimer(self)
         self._click_timer.setSingleShot(True)
         self._click_timer.timeout.connect(self._deferred_single_click)
         self._pending_click_item = None
@@ -166,7 +170,7 @@ class PlaylistPanelMixin:
         from ui.floating_dialog import FloatingDockWidget
         self.playlist_dock = FloatingDockWidget(tr("channel_list", "Channel List"), self)
         self.playlist_dock.setWidget(playlist_container)
-        self.playlist_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
+        self.playlist_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable | QDockWidget.DockWidgetFeature.DockWidgetMovable | QDockWidget.DockWidgetFeature.DockWidgetFloatable)
         self.playlist_dock.setObjectName("playlist_dock")
         if hasattr(self, 'playlist_panel'):
             self.playlist_panel = None
@@ -174,7 +178,7 @@ class PlaylistPanelMixin:
 
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.playlist_dock)
         self.playlist_dock.setFloating(True)
-        self.playlist_dock.setMaximumWidth(380)
+        self.playlist_dock.setMaximumWidth(600)
         if not show:
             self.playlist_dock.hide()
 
@@ -204,7 +208,7 @@ class PlaylistPanelMixin:
             btn.setText(tooltip)
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             btn.setFixedHeight(20)
-            btn.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Fixed)
+            btn.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
             btn.setStyleSheet(f"""
                 QToolButton {{
                     color: {tab_icon_color};
@@ -251,7 +255,7 @@ class PlaylistPanelMixin:
         search_row.setContentsMargins(0, 0, 0, 0)
         search_row.setSpacing(4)
 
-        search_input = QtWidgets.QLineEdit()
+        search_input = QLineEdit()
         search_input.setPlaceholderText(tr("search_channel", "搜索频道..."))
         search_input.setClearButtonEnabled(True)
         search_input.setStyleSheet(AppStyles.player_search_input_style())
@@ -310,6 +314,7 @@ class PlaylistPanelMixin:
             on_double_click=self._on_channel_double_clicked,
             on_context_menu=self._on_sub_channel_context_menu,
         )
+        self.sub_channel_list.setToolTip(tr('sub_channel_list_tooltip', '订阅频道列表，双击播放，右键打开菜单'))
         sub_layout.addWidget(self.sub_channel_list, 1)
 
         self.sub_empty_label = QLabel(tr("no_channels", "No channels"))
@@ -342,6 +347,7 @@ class PlaylistPanelMixin:
             on_double_click=self._on_channel_double_clicked,
             on_context_menu=self._on_local_channel_context_menu,
         )
+        self.local_channel_list.setToolTip(tr('local_channel_list_tooltip', '本地频道列表，双击播放，右键打开菜单'))
         local_layout.addWidget(self.local_channel_list, 1)
 
         self.local_empty_label = QLabel(tr("no_channels", "No channels"))
@@ -361,6 +367,7 @@ class PlaylistPanelMixin:
             on_click=self.favorites_ctrl.on_favorite_item_clicked,
             on_context_menu=self.favorites_ctrl.show_favorites_context_menu,
         )
+        self.fav_channel_list.setToolTip(tr('fav_channel_list_tooltip', '收藏频道列表，双击播放，右键管理收藏'))
         fav_layout.addWidget(self.fav_channel_list, 1)
 
         self.fav_empty_label = QLabel(tr("no_favorites", "No favorites"))
@@ -380,6 +387,7 @@ class PlaylistPanelMixin:
             on_click=self.favorites_ctrl.on_history_item_clicked,
             on_context_menu=self.favorites_ctrl.show_history_context_menu,
         )
+        self.history_channel_list.setToolTip(tr('history_channel_list_tooltip', '播放历史列表，双击播放，右键管理历史'))
         history_layout.addWidget(self.history_channel_list, 1)
 
         self.history_empty_label = QLabel(tr("no_history", "No play history"))
@@ -420,13 +428,13 @@ class PlaylistPanelMixin:
 
         if self.channel_list.viewMode() == QListWidget.ViewMode.IconMode:
             tab = 'sub' if index == 0 else 'local'
-            QTimer.singleShot(200, lambda: self._capture_visible_thumbnails(tab))
+            QTimer.singleShot(200, lambda: None if (_shiboken_isvalid and not _shiboken_isvalid(self)) else self._capture_visible_thumbnails(tab))
 
     def on_sub_group_changed(self, group_name):
         """订阅标签分组切换"""
         self._populate_channel_list_for(self.sub_channel_list, self._sub_channels, group_name)
         if self.sub_channel_list.viewMode() == QListWidget.ViewMode.IconMode:
-            QTimer.singleShot(200, lambda: self._capture_visible_thumbnails('sub'))
+            QTimer.singleShot(200, lambda: None if (_shiboken_isvalid and not _shiboken_isvalid(self)) else self._capture_visible_thumbnails('sub'))
 
     def on_local_group_changed(self, group_name):
         """本地标签分组切换"""

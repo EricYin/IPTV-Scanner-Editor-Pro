@@ -32,7 +32,7 @@ class PanelMixin:
             self.panel_vis.restore_from_manual_hide(is_local_file=is_local)
         else:
             if self.panel_vis.is_auto_hidden:
-                self.panel_vis._auto_hide_saved = dict(self.panel_vis._auto_hide_saved or {})
+                _ = self.panel_vis.snapshot_auto_hide_saved()
                 self.panel_vis.set_auto_hide_visible()
             self.panel_vis.hide_all()
         self._sync_panel_actions()

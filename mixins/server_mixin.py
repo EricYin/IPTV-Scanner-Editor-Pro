@@ -56,12 +56,14 @@ class ServerMixin:
             logger.error(f"打开Server API失败: {e}")
 
     def _show_server_settings(self):
-        from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+        from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLabel,
                                         QSpinBox, QCheckBox, QPushButton, QComboBox)
         from ui.styles import AppStyles
+        from ui.floating_dialog import FloatingDialog
         tr = self.language_manager.tr
-        dialog = QDialog(self)
+        dialog = FloatingDialog(self, frameless=False, stay_on_top=False)
         dialog.setWindowTitle(tr('server_settings', 'Server设置'))
+        dialog.setStyleSheet(AppStyles.dialog_style())
         dialog.setMinimumWidth(400)
         layout = QVBoxLayout(dialog)
         layout.setSpacing(16)
@@ -75,12 +77,13 @@ class ServerMixin:
         port = server.port if is_running else settings.get('port', 8080)
 
         status_label = QLabel()
+        _colors = AppStyles._get_colors()
         if is_running:
             status_label.setText(f"● {tr('server_running', 'Server运行中')}  http://localhost:{port}")
-            status_label.setStyleSheet("color: #4CAF50; font-weight: bold; font-size: 13px;")
+            status_label.setStyleSheet(f"color: {_colors.get('success', '#4CAF50')}; font-weight: bold; font-size: 13px;")
         else:
             status_label.setText(f"○ {tr('server_not_running', 'Server未运行')}")
-            status_label.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 13px;")
+            status_label.setStyleSheet(f"color: {_colors.get('warning', '#FF9800')}; font-weight: bold; font-size: 13px;")
         layout.addWidget(status_label)
 
         layout.addSpacing(4)
@@ -104,8 +107,8 @@ class ServerMixin:
         host_label.setFixedWidth(70)
         host_layout.addWidget(host_label)
         host_combo = QComboBox()
-        host_combo.addItem('0.0.0.0 (所有接口)', '0.0.0.0')
-        host_combo.addItem('127.0.0.1 (仅本机)', '127.0.0.1')
+        host_combo.addItem(f"0.0.0.0 ({tr('all_interfaces', '所有接口')})", '0.0.0.0')
+        host_combo.addItem(f"127.0.0.1 ({tr('localhost_only', '仅本机')})", '127.0.0.1')
         host_idx = host_combo.findData(settings.get('host', '0.0.0.0'))
         if host_idx >= 0:
             host_combo.setCurrentIndex(host_idx)

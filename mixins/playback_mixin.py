@@ -3,6 +3,7 @@ from typing import Any, Dict
 from PySide6.QtCore import QTimer
 from core.log_manager import global_logger as logger
 from utils.platform_utils import wayland_set_geometry
+from utils.thread_safety import safe_single_shot
 
 
 class PlaybackMixin:
@@ -63,7 +64,14 @@ class PlaybackMixin:
             self.status_bar_show_message(
                 f"{tr('reconnecting', 'Reconnecting')}: {channel_name} "
                 f"({self.player_controller._reconnect_count}/{self.player_controller._max_reconnect})")
-        QTimer.singleShot(self.RECONNECT_DELAY_MS, lambda: self._do_reconnect(url))
+
+        def _reconnect_callback():
+            try:
+                self._do_reconnect(url)
+            except RuntimeError:
+                pass
+
+        safe_single_shot(self.RECONNECT_DELAY_MS, self, _reconnect_callback)
 
     def _on_timeshift_continue(self):
         if self.play_state.is_timeshift:
@@ -92,7 +100,7 @@ class PlaybackMixin:
 
         try:
             resolution = self.player_controller.get_video_resolution()
-            if not resolution or resolution == "未知":
+            if not resolution:
                 return
 
             parts = resolution.split('x')

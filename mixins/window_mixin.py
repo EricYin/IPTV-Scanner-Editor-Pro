@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QDialog
 
 from core.log_manager import global_logger as logger
 from ui.styles import AppStyles
-from utils.platform_utils import is_wayland, wayland_move, wayland_set_geometry
+from utils.platform_utils import wayland_move, wayland_set_geometry
 
 
 class WindowMixin:
@@ -64,6 +64,8 @@ class WindowMixin:
         self._position_floating_docks()
 
     def _position_floating_docks(self):
+        if getattr(self, '_dock_layout_unlocked', False):
+            return
         import time
         now = time.time()
         if hasattr(self, '_last_position_time') and now - self._last_position_time < 0.05:
@@ -90,7 +92,8 @@ class WindowMixin:
                 control_panel_h = getattr(self, '_last_control_panel_h', floating_dock.height() or 170)
         else:
             control_panel_h = 170
-        status_bar_h = 25
+        sb = self.statusBar() if hasattr(self, 'statusBar') else None
+        status_bar_h = sb.height() if sb and sb.isVisible() else 25
 
         side_top = mw_y + title_bar_h + menu_bar_h + gap
         side_h = mw_h - title_bar_h - menu_bar_h - control_panel_h - status_bar_h - gap * 2
@@ -102,7 +105,7 @@ class WindowMixin:
                 self._epg_dock_w = self.epg_dock.width()
             self.epg_dock.move(mw_x + gap, side_top)
             self.epg_dock.setMinimumHeight(max(150, side_h))
-            self.epg_dock.setMaximumHeight(max(150, side_h))
+
             self.epg_dock.setFixedWidth(self._epg_dock_w)
 
         if hasattr(self, 'playlist_dock') and self.playlist_dock:
@@ -113,7 +116,7 @@ class WindowMixin:
             pl_w = self._playlist_dock_w
             self.playlist_dock.move(mw_x + mw_w - pl_w - gap, side_top)
             self.playlist_dock.setMinimumHeight(max(150, side_h))
-            self.playlist_dock.setMaximumHeight(max(150, side_h))
+
             self.playlist_dock.setFixedWidth(pl_w)
 
         if hasattr(self, 'floating_dock') and self.floating_dock:
@@ -124,6 +127,44 @@ class WindowMixin:
             fl_x = mw_x + (mw_w - self.floating_dock.width()) // 2
             fl_y = mw_y + mw_h - control_panel_h - status_bar_h - gap
             self.floating_dock.move(fl_x, fl_y)
+
+    def toggle_dock_layout_lock(self):
+        self._dock_layout_unlocked = not getattr(self, '_dock_layout_unlocked', False)
+        if not self._dock_layout_unlocked:
+            self._position_floating_docks()
+
+    def _show_fullscreen_menu_button(self):
+        from PySide6.QtWidgets import QToolButton
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QIcon
+        if hasattr(self, '_fs_menu_btn') and self._fs_menu_btn:
+            return
+        self._fs_menu_btn = QToolButton(self)
+        self._fs_menu_btn.setText('≡')
+        self._fs_menu_btn.setFixedSize(28, 28)
+        self._fs_menu_btn.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self._fs_menu_btn.setStyleSheet("QToolButton { background: rgba(30,30,30,180); color: white; border: none; border-radius: 4px; font-size: 16px; } QToolButton:hover { background: rgba(60,60,60,220); }")
+        self._fs_menu_btn.move(4, 4)
+        self._fs_menu_btn.show()
+        self._fs_menu_btn.clicked.connect(self._toggle_fs_menu_bar)
+
+    def _hide_fullscreen_menu_button(self):
+        if hasattr(self, '_fs_menu_btn') and self._fs_menu_btn:
+            try:
+                self._fs_menu_btn.deleteLater()
+            except Exception:
+                pass
+            self._fs_menu_btn = None
+        if hasattr(self, '_custom_menu_bar') and self._custom_menu_bar:
+            self._custom_menu_bar.hide()
+
+    def _toggle_fs_menu_bar(self):
+        if hasattr(self, '_custom_menu_bar') and self._custom_menu_bar:
+            if self._custom_menu_bar.isVisible():
+                self._custom_menu_bar.hide()
+            else:
+                self._custom_menu_bar.show()
+                self._custom_menu_bar.raise_()
 
     def toggle_fullscreen(self, checked=None):
         if checked is not None and self.fullscreen_button.isCheckable():
@@ -146,6 +187,7 @@ class WindowMixin:
                 self._title_bar.hide()
             if hasattr(self, '_custom_menu_bar') and self._custom_menu_bar:
                 self._custom_menu_bar.hide()
+            self._show_fullscreen_menu_button()
             if self.status_bar:
                 self.status_bar.hide()
             self.showFullScreen()
@@ -162,6 +204,7 @@ class WindowMixin:
         else:
             self._stop_auto_hide_timer()
             self.unsetCursor()
+            self._hide_fullscreen_menu_button()
             saved = self.panel_vis.restore_context('fullscreen')
             logger.debug(f"退出全屏: showNormal前geometry={self.geometry().getRect()}, isFullScreen={self.isFullScreen()}, saved_geo={getattr(self, '_before_fullscreen_geo', None)}")
             self.showNormal()
@@ -337,6 +380,11 @@ class WindowMixin:
             return
         if remember and config:
             config.save_close_behavior('exit')
+        try:
+            from server.app import stop_server
+            stop_server()
+        except Exception:
+            pass
         if hasattr(self, 'event_handler') and self.event_handler:
             self.event_handler.closeEvent(event)
         else:

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QListWidget
 
 from core.log_manager import global_logger as logger
 from core.application_state import app_state
+from utils.thread_safety import safe_single_shot
 
 
 class ChannelMixin:
@@ -65,7 +66,7 @@ class ChannelMixin:
                 if target_idx < 0 and last_idx >= 0 and last_idx < len(channels_to_search or []):
                     target_idx = last_idx
                 if target_idx >= 0:
-                    QTimer.singleShot(100, lambda idx=target_idx, sl=target_list: self.select_channel_by_index(idx, source_list=sl))
+                    safe_single_shot(100, self, lambda idx=target_idx, sl=target_list: self.select_channel_by_index(idx, source_list=sl))
 
     def _update_groups_for(self, source):
         channels = self._sub_channels if source == 'subscription' else self._local_channels
@@ -78,7 +79,7 @@ class ChannelMixin:
         groups = []
         seen = set()
         for channel in channels or []:
-            for g in channel.get('_groups', [channel.get('group', '') or '未分类']):
+            for g in channel.get('_groups', [channel.get('group', '') or tr('uncategorized', '未分类')]):
                 if g and g not in seen:
                     groups.append(g)
                     seen.add(g)
@@ -327,6 +328,8 @@ class ChannelMixin:
             return
         for i in range(target_list.count()):
             item = target_list.item(i)
+            if item is None:
+                continue
             if item.data(Qt.ItemDataRole.UserRole) == idx:
                 target_list.setCurrentItem(item)
                 self.select_channel(item, source_list=target_list)
@@ -345,6 +348,8 @@ class ChannelMixin:
                 channels = self._sub_channels
             for i in range(self.channel_list.count()):
                 item = self.channel_list.item(i)
+                if item is None:
+                    continue
                 idx = item.data(Qt.ItemDataRole.UserRole)
                 if isinstance(idx, int) and 0 <= idx < len(channels or []):
                     ch = channels[idx]
@@ -388,4 +393,4 @@ class ChannelMixin:
         self.populate_channel_list(source)
 
         if mode == 'grid':
-            QTimer.singleShot(200, lambda: self._capture_visible_thumbnails(tab))
+            safe_single_shot(200, self, lambda: self._capture_visible_thumbnails(tab))

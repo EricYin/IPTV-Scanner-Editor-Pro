@@ -33,7 +33,7 @@ class ControlPanelMixin:
         floating_container.setMinimumWidth(360)
         floating_container.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.floating_layout = QVBoxLayout(floating_container)
-        self.floating_layout.setContentsMargins(12, 8, 12, 8)
+        self.floating_layout.setContentsMargins(8, 8, 8, 8)
         self.floating_layout.setSpacing(3)
 
         self._create_media_row()
@@ -41,7 +41,7 @@ class ControlPanelMixin:
         from ui.floating_dialog import FloatingDockWidget
         self.floating_dock = FloatingDockWidget(tr("control_panel", "Control Panel"), self)
         self.floating_dock.setWidget(floating_container)
-        self.floating_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
+        self.floating_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable | QDockWidget.DockWidgetFeature.DockWidgetMovable | QDockWidget.DockWidgetFeature.DockWidgetFloatable)
         self.floating_dock.setObjectName("floating_dock")
         if hasattr(self, 'floating_panel'):
             self.floating_panel = None
@@ -83,6 +83,7 @@ class ControlPanelMixin:
         self.video_info.setStyleSheet(AppStyles.player_media_badge_style())
         self.video_info.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self.video_info.setFixedHeight(22)
+        self.video_info.setToolTip(tr('tooltip_video_info', '视频信息'))
         self.video_info.setText(tr('not_playing', 'Not playing'))
         self.media_row.addWidget(self.video_info)
 
@@ -90,6 +91,7 @@ class ControlPanelMixin:
         self.hdr_badge.setStyleSheet(AppStyles.player_hdr_badge_style())
         self.hdr_badge.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self.hdr_badge.setFixedHeight(22)
+        self.hdr_badge.setToolTip(tr('tooltip_hdr', 'HDR状态'))
         self.hdr_badge.hide()
         self.media_row.addWidget(self.hdr_badge)
 
@@ -103,7 +105,8 @@ class ControlPanelMixin:
         self.audio_info = QLabel()
         self.audio_info.setStyleSheet(AppStyles.player_media_badge_style())
         self.audio_info.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        self.audio_info.setFixedHeight(18)
+        self.audio_info.setFixedHeight(22)
+        self.audio_info.setToolTip(tr('tooltip_audio_info', '音频信息'))
         self.audio_info.setText("--")
         self.media_row.addWidget(self.audio_info)
 
@@ -117,14 +120,16 @@ class ControlPanelMixin:
         self.network_info = QLabel()
         self.network_info.setStyleSheet(AppStyles.player_media_badge_style())
         self.network_info.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        self.network_info.setFixedHeight(18)
+        self.network_info.setFixedHeight(22)
+        self.network_info.setToolTip(tr('tooltip_network_info', '网络信息'))
         self.network_info.setText("--")
         self.media_row.addWidget(self.network_info)
 
         self.buffer_info = QLabel("")
         self.buffer_info.setStyleSheet(AppStyles.player_media_badge_style())
         self.buffer_info.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        self.buffer_info.setFixedHeight(18)
+        self.buffer_info.setFixedHeight(22)
+        self.buffer_info.setToolTip(tr('tooltip_buffer_info', '缓冲信息'))
         self.buffer_info.hide()
         self.media_row.addWidget(self.buffer_info)
 
@@ -225,24 +230,6 @@ class ControlPanelMixin:
 
         btn_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
         btn_icon_size = QSize(20, 20)
-        self.play_button = QToolButton()
-        self.play_button.setIcon(QIcon(AppStyles.get_icon('play', btn_color)))  # type: ignore[arg-type]
-        self.play_button.setIconSize(btn_icon_size)
-        self.play_button.setFixedSize(self.CTRL_BUTTON_WIDTH, self.CTRL_BUTTON_HEIGHT)
-        self.play_button.setStyleSheet(AppStyles.player_button_style())
-        self.play_button.clicked.connect(self.toggle_play)
-        self.play_button.setToolTip(tr("panel_play", "播放/暂停"))
-        self.control_row.addWidget(self.play_button)
-
-        self.stop_button = QToolButton()
-        self.stop_button.setIcon(QIcon(AppStyles.get_icon('stop', btn_color)))  # type: ignore[arg-type]
-        self.stop_button.setIconSize(btn_icon_size)
-        self.stop_button.setFixedSize(self.CTRL_BUTTON_WIDTH, self.CTRL_BUTTON_HEIGHT)
-        self.stop_button.setStyleSheet(AppStyles.player_button_style())
-        self.stop_button.clicked.connect(self.stop_playback)
-        self.stop_button.setToolTip(tr("panel_stop", "停止"))
-        self.control_row.addWidget(self.stop_button)
-
         self.prev_ch_button = QToolButton()
         self.prev_ch_button.setIcon(QIcon(AppStyles.get_icon('prev', btn_color)))  # type: ignore[arg-type]
         self.prev_ch_button.setIconSize(btn_icon_size)
@@ -252,6 +239,15 @@ class ControlPanelMixin:
         self.prev_ch_button.setToolTip(tr("panel_prev_ch", "上一频道"))
         self.control_row.addWidget(self.prev_ch_button)
 
+        self.play_button = QToolButton()
+        self.play_button.setIcon(QIcon(AppStyles.get_icon('play', btn_color)))  # type: ignore[arg-type]
+        self.play_button.setIconSize(btn_icon_size)
+        self.play_button.setFixedSize(self.CTRL_BUTTON_WIDTH, self.CTRL_BUTTON_HEIGHT)
+        self.play_button.setStyleSheet(AppStyles.player_button_style())
+        self.play_button.clicked.connect(self.toggle_play)
+        self.play_button.setToolTip(tr("panel_play", "播放/暂停"))
+        self.control_row.addWidget(self.play_button)
+
         self.next_ch_button = QToolButton()
         self.next_ch_button.setIcon(QIcon(AppStyles.get_icon('next', btn_color)))  # type: ignore[arg-type]
         self.next_ch_button.setIconSize(btn_icon_size)
@@ -260,6 +256,15 @@ class ControlPanelMixin:
         self.next_ch_button.clicked.connect(lambda: self.event_handler._switch_channel(1))
         self.next_ch_button.setToolTip(tr("panel_next_ch", "下一频道"))
         self.control_row.addWidget(self.next_ch_button)
+
+        self.stop_button = QToolButton()
+        self.stop_button.setIcon(QIcon(AppStyles.get_icon('stop', btn_color)))  # type: ignore[arg-type]
+        self.stop_button.setIconSize(btn_icon_size)
+        self.stop_button.setFixedSize(self.CTRL_BUTTON_WIDTH, self.CTRL_BUTTON_HEIGHT)
+        self.stop_button.setStyleSheet(AppStyles.player_button_style())
+        self.stop_button.clicked.connect(self.stop_playback)
+        self.stop_button.setToolTip(tr("panel_stop", "停止"))
+        self.control_row.addWidget(self.stop_button)
 
         self.progress_group = QHBoxLayout()
         self.progress_group.setSpacing(4)
@@ -291,8 +296,8 @@ class ControlPanelMixin:
 
         self.volume_button = QToolButton()
         self.volume_button.setIcon(QIcon(AppStyles.get_icon('volume', btn_color)))  # type: ignore[arg-type]
-        self.volume_button.setIconSize(QSize(22, 20))
-        self.volume_button.setFixedSize(40, 32)
+        self.volume_button.setIconSize(btn_icon_size)
+        self.volume_button.setFixedSize(36, 32)
         self.volume_button.setStyleSheet(AppStyles.player_button_style())
         self.volume_button.clicked.connect(self.toggle_mute)
         self.volume_button.setToolTip(tr("panel_volume", "音量"))
@@ -310,8 +315,8 @@ class ControlPanelMixin:
         self.exit_catchup_button = QToolButton()
         self.exit_catchup_button.setIcon(QIcon(AppStyles.get_icon('exit_catchup', btn_color)))  # type: ignore[arg-type]
         self.exit_catchup_button.setIconSize(btn_icon_size)
-        self.exit_catchup_button.setText(tr("exit_catchup", "退出回看"))
-        self.exit_catchup_button.setFixedSize(100, 32)
+
+        self.exit_catchup_button.setFixedSize(36, 32)
         self.exit_catchup_button.setStyleSheet(AppStyles.player_button_style())
         self.exit_catchup_button.clicked.connect(self.exit_catchup)
         self.exit_catchup_button.setToolTip(tr("panel_exit_catchup", "退出回看"))
@@ -331,7 +336,7 @@ class ControlPanelMixin:
         self.aspect_button = QToolButton()
         self.aspect_button.setIcon(QIcon(AppStyles.get_icon('aspect', btn_color)))  # type: ignore[arg-type]
         self.aspect_button.setIconSize(btn_icon_size)
-        self.aspect_button.setFixedSize(52, 32)
+        self.aspect_button.setFixedSize(36, 32)
         self.aspect_button.setStyleSheet(AppStyles.player_button_style())
         self.aspect_button.clicked.connect(self.media_ctrl.show_aspect_menu)
         self.aspect_button.setToolTip(tr("panel_aspect", "画面比例"))
@@ -341,7 +346,7 @@ class ControlPanelMixin:
         self.audio_track_button.setIcon(QIcon(AppStyles.get_icon('audio_track', btn_color)))  # type: ignore[arg-type]
         self.audio_track_button.setIconSize(btn_icon_size)
         self.audio_track_button.setToolTip(self.language_manager.tr("panel_audio_track", "Audio Track"))
-        self.audio_track_button.setFixedSize(40, 32)
+        self.audio_track_button.setFixedSize(36, 32)
         self.audio_track_button.setStyleSheet(AppStyles.player_button_style())
         self.audio_track_button.clicked.connect(self.media_ctrl.show_audio_track_menu)
         self.control_row.addWidget(self.audio_track_button)
@@ -350,7 +355,7 @@ class ControlPanelMixin:
         self.sub_track_button.setIcon(QIcon(AppStyles.get_icon('subtitle', btn_color)))  # type: ignore[arg-type]
         self.sub_track_button.setIconSize(btn_icon_size)
         self.sub_track_button.setToolTip(self.language_manager.tr("panel_subtitle", "Subtitle"))
-        self.sub_track_button.setFixedSize(40, 32)
+        self.sub_track_button.setFixedSize(36, 32)
         self.sub_track_button.setStyleSheet(AppStyles.player_button_style())
         self.sub_track_button.clicked.connect(self.media_ctrl.show_sub_track_menu)
         self.control_row.addWidget(self.sub_track_button)
