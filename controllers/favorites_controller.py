@@ -1,7 +1,6 @@
 from typing import Dict, Any, List, Optional
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMenu
-from PySide6.QtGui import QAction
 from core.log_manager import global_logger as logger
 from controllers.main_window_protocol import MainWindowProtocol
 
@@ -63,7 +62,7 @@ class FavoritesController:
         if not self._service:
             return
         from PySide6.QtWidgets import QListWidgetItem, QListWidget
-        from PySide6.QtCore import Qt, QSize
+        from PySide6.QtCore import QSize
         from PySide6 import QtWidgets
         from ui.styles import AppStyles
         w = self.window
@@ -129,7 +128,7 @@ class FavoritesController:
         if not self._service:
             return
         from PySide6.QtWidgets import QListWidgetItem, QListWidget
-        from PySide6.QtCore import Qt, QSize
+        from PySide6.QtCore import QSize
         from PySide6 import QtWidgets
         from ui.styles import AppStyles
         w = self.window
@@ -222,7 +221,7 @@ class FavoritesController:
         if not url:
             return
         existing_ch = None
-        for ch_list in (getattr(w, '_sub_channels', []), getattr(w, '_local_channels', [])):
+        for ch_list in (getattr(w, '_sub_channels', None) or [], getattr(w, '_local_channels', None) or []):
             for ch in ch_list:
                 if ch.get('url', '') == url:
                     existing_ch = ch
@@ -248,9 +247,9 @@ class FavoritesController:
 
         idx = item.data(Qt.ItemDataRole.UserRole)
         if source == 'subscription':
-            channels = getattr(w, '_sub_channels', [])
+            channels = getattr(w, '_sub_channels', None) or []
         else:
-            channels = getattr(w, '_local_channels', [])
+            channels = getattr(w, '_local_channels', None) or []
 
         if not isinstance(idx, int) or idx < 0 or idx >= len(channels):
             return
@@ -287,12 +286,75 @@ class FavoritesController:
         copy_url_action = menu.addAction(tr('copy_channel_url', '复制频道地址'))
         copy_url_action.triggered.connect(lambda: self._copy_text(channel.get('url', '')))
 
+        menu.addSeparator()
+
+        # 编辑频道信息
+        edit_action = menu.addAction(tr('edit_channel_info', '编辑频道信息'))
+        edit_action.triggered.connect(lambda: self._edit_channel_info(channel, idx, source, list_widget))
+
+        # 移动到分组
+        if source == 'local':
+            move_action = menu.addAction(tr('move_to_group', '移动到分组'))
+            move_action.triggered.connect(lambda: self._move_channel_to_group(channel, idx, list_widget))
+
         if source == 'local':
             menu.addSeparator()
             del_action = menu.addAction(tr('delete_channel', '删除频道'))
             del_action.triggered.connect(lambda: self._do_delete_local_channel(idx))
 
         menu.exec(list_widget.mapToGlobal(pos))
+
+    def _edit_channel_info(self, channel, idx, source, list_widget):
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+        w = self.window
+        tr = w.language_manager.tr
+        new_name, ok = QInputDialog.getText(
+            w, tr('edit_channel_info', '编辑频道信息'),
+            tr('channel_name', '频道名称:'), text=channel.get('name', ''))
+        if not ok:
+            return
+        new_url, ok = QInputDialog.getText(
+            w, tr('edit_channel_info', '编辑频道信息'),
+            tr('channel_url', '频道地址:'), text=channel.get('url', ''))
+        if not ok:
+            return
+        channel['name'] = new_name
+        channel['url'] = new_url
+        if source == 'subscription':
+            channels = getattr(w, '_sub_channels', None) or []
+        else:
+            channels = getattr(w, '_local_channels', None) or []
+        if 0 <= idx < len(channels):
+            channels[idx] = channel
+        if hasattr(w, 'channel_model'):
+            w.channel_model.channels = channels
+            w.channel_model.refresh()
+        logger.info(f"编辑频道: {new_name}")
+
+    def _move_channel_to_group(self, channel, idx, list_widget):
+        from PySide6.QtWidgets import QInputDialog
+        w = self.window
+        tr = w.language_manager.tr
+        channels = getattr(w, '_local_channels', None) or []
+        groups = sorted(set(ch.get('group', '') for ch in channels if ch.get('group')))
+        if not groups:
+            return
+        items = [tr('uncategorized', '未分类')] + groups
+        choice, ok = QInputDialog.getItem(
+            w, tr('move_to_group', '移动到分组'),
+            tr('select_group', '选择分组:'), items, 0, False)
+        if not ok:
+            return
+        if choice == items[0]:
+            choice = ''
+        channel['group'] = choice
+        channel['_groups'] = [choice] if choice else []
+        if 0 <= idx < len(channels):
+            channels[idx] = channel
+        if hasattr(w, 'channel_model'):
+            w.channel_model.channels = channels
+            w.channel_model.refresh()
+        logger.info(f"移动频道到分组: {choice}")
 
     def show_favorites_context_menu(self, pos):
         w = self.window
@@ -435,7 +497,7 @@ class FavoritesController:
 
     def _do_delete_local_channel(self, idx):
         w = self.window
-        channels = getattr(w, '_local_channels', [])
+        channels = getattr(w, '_local_channels', None) or []
         if not isinstance(idx, int) or idx < 0 or idx >= len(channels):
             return
         removed = channels.pop(idx)

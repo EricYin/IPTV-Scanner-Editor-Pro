@@ -5,11 +5,12 @@ EPG节目单控制器 - 负责EPG数据管理、显示、交互
 
 from datetime import datetime, timedelta, date
 from PySide6.QtWidgets import QListWidgetItem, QStyledItemDelegate, QStyleOptionViewItem
-from PySide6.QtGui import QColor, QPainter, QFontMetrics, QFont
+from PySide6.QtGui import QPainter, QFontMetrics, QFont
 from PySide6.QtCore import Qt, QTimer, QRect
 
 from core.log_manager import global_logger as logger
 from controllers.main_window_protocol import MainWindowProtocol
+from utils.thread_safety import safe_single_shot
 
 
 class EPGItemDelegate(QStyledItemDelegate):
@@ -336,7 +337,7 @@ class EPGController:
                 if is_browsing_other_date:
                     logger.info(f"EPG: {target_date} 无节目数据")
                 else:
-                    logger.info(f"EPG: 今天无节目数据")
+                    logger.info("EPG: 今天无节目数据")
             else:
                 logger.debug(f"EPG: 按日期 {target_date} 过滤，{len(epg_list)} -> {len(filtered_list)} 个节目")
 
@@ -489,7 +490,6 @@ class EPGController:
         if not program:
             return
 
-        from core.log_manager import global_logger as logger
 
         # 判断节目状态
         start_str = program.get('start', '')
@@ -519,12 +519,12 @@ class EPGController:
             logger.info(f"用户点击EPG节目 '{program.get('title')}'，启动回看")
             self.window.start_catchup(program)
         elif not channel_catchup:
-            logger.debug(f"频道不支持回看功能（无 catchup_source 或 catchup 类型）")
+            logger.debug("频道不支持回看功能（无 catchup_source 或 catchup 类型）")
             if hasattr(self.window, 'status_bar_show_message'):
                 tr = self.tr
                 self.window.status_bar_show_message(tr('epg_no_catchup', '该频道不支持回看'))
         elif not is_past_program:
-            logger.debug(f"点击的是未来节目，暂不支持预约播放")
+            logger.debug("点击的是未来节目，暂不支持预约播放")
             if hasattr(self.window, 'status_bar_show_message'):
                 tr = self.tr
                 start_display = ''
@@ -590,7 +590,6 @@ class EPGController:
         if not epg_list or not hasattr(self.window, 'epg_content'):
             return
 
-        from core.log_manager import global_logger as logger
 
         w = self.window
 
@@ -649,7 +648,7 @@ class EPGController:
                         self.window.epg_content.ScrollHint.PositionAtCenter
                     )
                     logger.debug(f"EPG已定位到第 {index + 1} 个节目（{label}，居中显示）")
-        QTimer.singleShot(100, do_scroll)
+        safe_single_shot(100, self.window, do_scroll)
 
     def toggle_epg(self, checked: bool):
         """切换EPG面板显示/隐藏"""

@@ -273,9 +273,17 @@ class PipController:
                 self.window.language_manager.tr('pip_mode', 'PiP Mode') + " " +
                 self.window.language_manager.tr('pip_exited', 'exited'))
 
-            QTimer.singleShot(100, self._restore_hidden_elements)
-            QTimer.singleShot(200, self.window.update_floating_position)
-            QTimer.singleShot(300, self.window._restart_auto_hide_timer)
+            def _safe_call(fn):
+                def _wrapper():
+                    try:
+                        fn()
+                    except RuntimeError:
+                        pass
+                return _wrapper
+
+            QTimer.singleShot(100, _safe_call(self._restore_hidden_elements))
+            QTimer.singleShot(200, _safe_call(self.window.update_floating_position))
+            QTimer.singleShot(300, _safe_call(self.window._restart_auto_hide_timer))
             logger.info("已退出画中画模式")
         except Exception as e:
             logger.error(f"退出画中画模式失败: {e}")
@@ -524,8 +532,7 @@ class PipController:
         if self._pip_close_btn:
             self._pip_close_btn.move(vw.width() - btn_size - close_margin, close_margin)
 
-        from PySide6.QtGui import QRegion
-        from PySide6.QtCore import QRect
+
         mask = QRegion()
         for btn in self._pip_buttons:
             if not btn.isHidden():

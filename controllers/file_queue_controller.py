@@ -3,6 +3,10 @@ import random
 from typing import Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal
+try:
+    from shiboken6 import isValid as _shiboken_isvalid
+except ImportError:
+    _shiboken_isvalid = None
 
 from core.log_manager import global_logger as logger
 
@@ -106,7 +110,7 @@ class FileQueueController(QObject):
             return
 
         # 延迟一点避免与 END_FILE 处理冲突
-        QTimer.singleShot(300, lambda: self._play_next_file(ended_url))
+        QTimer.singleShot(300, lambda: None if (_shiboken_isvalid and not _shiboken_isvalid(self)) else self._play_next_file(ended_url))
 
     def _play_next_file(self, ended_url: str):
         """播放下一个文件"""
@@ -251,7 +255,7 @@ class FileQueueController(QObject):
         pos = pc.ab_loop_set_a()
         tr = self.window.language_manager.tr
         if hasattr(self.window, '_show_osd_feedback'):
-            self.window._show_osd_feedback(f"{tr('ab_loop_a', 'A-B Loop A')}: {pos:.2f}s")
+            self.window._show_osd_feedback(f"{tr('osd_ab_loop_a', 'A-B Loop A')}: {pos:.2f}s")
         return pos
 
     def ab_loop_set_b(self) -> Optional[float]:
@@ -262,7 +266,7 @@ class FileQueueController(QObject):
         pos = pc.ab_loop_set_b()
         tr = self.window.language_manager.tr
         if hasattr(self.window, '_show_osd_feedback'):
-            self.window._show_osd_feedback(f"{tr('ab_loop_b', 'A-B Loop B')}: {pos:.2f}s")
+            self.window._show_osd_feedback(f"{tr('osd_ab_loop_b', 'A-B Loop B')}: {pos:.2f}s")
         return pos
 
     def ab_loop_clear(self):
@@ -273,7 +277,7 @@ class FileQueueController(QObject):
         pc.ab_loop_clear()
         tr = self.window.language_manager.tr
         if hasattr(self.window, '_show_osd_feedback'):
-            self.window._show_osd_feedback(tr('ab_loop_cleared', 'A-B Loop cleared'))
+            self.window._show_osd_feedback(tr('osd_ab_loop_cleared', 'A-B Loop cleared'))
 
     def get_ab_loop_status(self) -> dict:
         pc = self.window.player_controller

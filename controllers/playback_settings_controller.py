@@ -39,8 +39,10 @@ class PlaybackSettingsController(QObject):
                 pc.about_to_stop.connect(self._on_about_to_stop)
             else:
                 # 没有专用信号，hook stop 方法
-                self._orig_stop = pc.stop
-                pc.stop = self._wrapped_stop
+                if not getattr(pc, '_is_stop_wrapped', False):
+                    self._orig_stop = pc.stop
+                    pc.stop = self._wrapped_stop
+                    pc._is_stop_wrapped = True
 
     # ---------- 文件加载时应用 ----------
     def _on_file_loaded(self):

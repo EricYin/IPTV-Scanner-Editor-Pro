@@ -84,6 +84,7 @@ class SubscriptionController:
     def _download_subscription_content(self, url: str) -> Optional[str]:
         """下载订阅内容"""
         import requests
+        from utils.http_session import get as _http_get
 
         config = ConfigManager()
         timeout = int(config.get_value('Network', 'timeout', '30') or 30)
@@ -101,7 +102,7 @@ class SubscriptionController:
 
         try:
             ssl_verify = config.get_value('Network', 'ssl_verify', 'true').lower() != 'false'
-            response = requests.get(url, timeout=timeout, headers=headers,
+            response = _http_get(url, timeout=timeout, headers=headers,
                                    allow_redirects=True, verify=ssl_verify)
             response.raise_for_status()
             return response.text
@@ -341,7 +342,7 @@ class SubscriptionController:
                 epg_sources = global_subscription_manager.get_epg_sources()
                 existing_urls = [src.get('url', '') for src in epg_sources] if epg_sources else []
                 if header_epg_url in existing_urls:
-                    logger.info(f"M3U文件头EPG已存在于订阅源中，跳过")
+                    logger.info("M3U文件头EPG已存在于订阅源中，跳过")
                 else:
                     logger.info(f"补充加载M3U文件头EPG: {header_epg_url[:80]}")
                     try:

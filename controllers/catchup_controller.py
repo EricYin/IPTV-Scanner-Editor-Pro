@@ -140,6 +140,8 @@ class CatchupController:
                     py_fmt = py_fmt.replace('ss', '%S')
                     result = target_dt.strftime(py_fmt)
                 except Exception:
+                    from core.log_manager import global_logger as logger
+                    logger.debug("build_catchup_url: 自定义格式解析失败，使用默认格式")
                     result = target_dt.strftime('%Y%m%d%H%M%S')
             return result
 
@@ -333,7 +335,7 @@ class CatchupController:
                     self.window.player_controller.set_speed(1.0)
                     self.window.speed_button.setText("1.0x")
 
-            self.window.player_controller.play(catchup_url, f"{channel_name} - {title} (回看)")
+            self.window.player_controller.play(catchup_url, f"{channel_name} - {title} ({self.window.language_manager.tr('catchup_osd', '回看')})")
             self.add_exit_catchup_button()
             if hasattr(self.window, 'media_ctrl'):
                 self.window.media_ctrl.update_catchup_indicator()
@@ -354,7 +356,7 @@ class CatchupController:
                 logger.error(f"显示退出回看按钮失败: {e}")
 
     def exit_catchup(self):
-        from datetime import datetime, timedelta
+
         from core.log_manager import global_logger as logger
 
         saved_original_channel = self.original_channel or self.window.current_channel
@@ -432,7 +434,7 @@ class CatchupController:
     def seek_catchup(self, position: float):
         w = self.window
         from core.log_manager import global_logger as logger
-        from datetime import timedelta, datetime
+
         import time as _time
 
         if self.catchup_program is None or self.original_channel is None:
@@ -531,7 +533,7 @@ class CatchupController:
 
             self._last_url_rebuild_time = _time.time()
             self._url_rebuild_pending = True
-            self._pending_seek_after_cooldown = None
+
             if self._cooldown_timer is not None:
                 try:
                     self._cooldown_timer.stop()
@@ -542,7 +544,7 @@ class CatchupController:
             w._catchup_start_progress = position
 
             if hasattr(w, 'player_controller') and w.player_controller:
-                w.player_controller.play(catchup_url, f"{channel_name} - {title} (回看)")
+                w.player_controller.play(catchup_url, f"{channel_name} - {title} ({w.language_manager.tr('catchup_osd', '回看')})")
         except Exception as e:
 
             logger.error(f"重新构建回看 URL 失败：{e}")
@@ -610,7 +612,7 @@ class CatchupController:
         import time as _time
         remaining_ms = max(200, int((self.URL_REBUILD_COOLDOWN - (_time.time() - self._last_url_rebuild_time)) * 1000))
         from PySide6.QtCore import QTimer
-        self._cooldown_timer = QTimer()
+        self._cooldown_timer = QTimer(self.window)
         self._cooldown_timer.setSingleShot(True)
         self._cooldown_timer.timeout.connect(self._execute_pending_seek)
         self._cooldown_timer.start(remaining_ms)
@@ -632,7 +634,7 @@ class CatchupController:
     def continue_timeshift(self):
         """时移流播放到终点后自动续播：从当前播放位置重建时移URL"""
         w = self.window
-        from datetime import timedelta, datetime
+
         from core.log_manager import global_logger as logger
 
         if not self.catchup_program or not self.original_channel:
@@ -671,11 +673,11 @@ class CatchupController:
         w._catchup_start_progress = 0
 
         if hasattr(w, 'player_controller') and w.player_controller:
-            w.player_controller.play(catchup_url, f"{channel_name} (时移续播)")
+            w.player_controller.play(catchup_url, f"{channel_name} ({w.language_manager.tr('timeshift_resume', '时移续播')})")
 
     def start_live_timeshift_from_progress(self, slider_seconds, catchup_source, has_epg=True):
         w = self.window
-        from datetime import timedelta, datetime
+
         from core.log_manager import global_logger as logger
 
         now = datetime.now()
@@ -751,7 +753,8 @@ class CatchupController:
             try:
                 self._cooldown_timer.stop()
             except Exception:
-                pass
+                from core.log_manager import global_logger as logger
+                logger.debug("自动检测回看模式失败，将使用默认方式")
             self._cooldown_timer = None
         w._catchup_start_time = _time.time()
         w._catchup_start_progress = offset_seconds
@@ -780,7 +783,7 @@ class CatchupController:
             w._progress_program_end = end_time
 
         if w.player_controller:
-            w.player_controller.play(timeshift_url, f"{channel_name} (时移 {offset_str})")
+            w.player_controller.play(timeshift_url, f"{channel_name} ({w.language_manager.tr('timeshift_label', '时移')} {offset_str})")
         w._show_exit_timeshift_button()
         w.media_ctrl.update_catchup_indicator()
         w._populate_epg_list()

@@ -1,5 +1,4 @@
-from typing import Dict, Any, List, Optional
-from PySide6.QtCore import QTimer
+from typing import Dict, Any, List
 from core.log_manager import global_logger as logger
 from controllers.main_window_protocol import MainWindowProtocol
 from ui.dialogs.reminder_popup import ReminderPopup
@@ -61,7 +60,7 @@ class EpgReminderController:
 
     def _switch_to_channel(self, channel_name: str, tvg_id: str = ''):
         w = self.window
-        channels = getattr(w, '_sub_channels', []) + getattr(w, '_local_channels', [])
+        channels = (getattr(w, '_sub_channels', None) or []) + (getattr(w, '_local_channels', None) or [])
         for ch in channels:
             if ch.get('name', '') == channel_name or (tvg_id and ch.get('tvg_id', '') == tvg_id):
                 w.current_channel = ch
@@ -96,6 +95,9 @@ class EpgReminderController:
     def _on_popup_destroyed(self, popup):
         if popup in self._active_popups:
             self._active_popups.remove(popup)
+
+    def get_active_popups(self) -> list:
+        return list(self._active_popups)
 
     def _show_reminder_notification(self, channel_name: str, program_title: str):
         from PySide6.QtWidgets import QSystemTrayIcon

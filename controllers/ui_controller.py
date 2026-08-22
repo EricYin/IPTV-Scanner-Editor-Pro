@@ -4,7 +4,7 @@ UI控制器 - 负责OSD显示、媒体信息更新、样式管理等
 """
 
 import re
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from datetime import timedelta
 from PySide6.QtCore import QTimer
 from controllers.main_window_protocol import MainWindowProtocol
@@ -16,7 +16,7 @@ class UIController:
     def __init__(self, main_window: MainWindowProtocol):
         self.window: MainWindowProtocol = main_window
         self._osd_visible = False
-        self._osd_timer = QTimer()
+        self._osd_timer = QTimer(self.window)
         self._osd_timer.setInterval(1000)
         self._osd_timer.timeout.connect(self._refresh_osd)
 
@@ -363,7 +363,7 @@ class UIController:
 
         hw = info.get('hwdec', '')
         if hw and hw != 'no':
-            video_parts.append("{}: {}".format(tr('hwdec_label', 'HW') or 'HW', hw))
+            video_parts.append("{}: {}".format(tr('hwdec_label_short', 'HW') or 'HW', hw))
 
         video_codec = info.get('video_codec', '')
         if video_codec and video_codec != '未知':
@@ -836,8 +836,10 @@ class UIController:
         self.window.progress_ctrl.update_progress(current_time_ms, total_time_ms, position)
 
         if hasattr(self.window, '_lyrics_widget') and self.window._lyrics_widget and self.window._lyrics_widget.isVisible():
-            time_pos = self.window.player_controller._get_mpv_property_double('time-pos') or 0.0
-            self.window._lyrics_widget.update_time(time_pos)
+            pc = self.window.player_controller
+            if pc:
+                time_pos = pc._get_mpv_property_double('time-pos') or 0.0
+                self.window._lyrics_widget.update_time(time_pos)
 
     def _update_cache_bar(self, buffer_state: dict):
         progress = getattr(self.window, 'program_progress', None)
@@ -1198,6 +1200,7 @@ class UIController:
         else:
             menu_bar = QMenuBar()
             menu_bar.setObjectName("customMenuBar")
+            menu_bar.setNativeMenuBar(False)
             self.window._custom_menu_bar = menu_bar
 
         menu_bar.setStyleSheet(AppStyles.player_menu_bar_style())
@@ -1453,23 +1456,31 @@ class UIController:
             refresh.triggered.connect(self.window.refresh_ui)
             view_menu.addAction(refresh)
 
+            view_menu.addSeparator()
+
+            lock_layout = QAction(tr("menu_lock_layout", "锁定面板布局"), self.window)
+            lock_layout.setCheckable(True)
+            lock_layout.setChecked(True)
+            lock_layout.triggered.connect(self.window.toggle_dock_layout_lock)
+            view_menu.addAction(lock_layout)
+
             reset_layout = QAction(tr("menu_reset_layout", "Reset Layout"), self.window)
             reset_layout.triggered.connect(self.window.reset_layout)
             view_menu.addAction(reset_layout)
 
             tools_menu = menu_bar.addMenu(tr("menu_tools", "Tools"))
 
-            scan_channels = QAction(tr("menu_scan_channels", "Scan & Organize"), self.window)
+            scan_channels = QAction(tr("menu_scan_channels", "Scan & Organize\tCtrl+Shift+S"), self.window)
             scan_channels.triggered.connect(self.window.open_scan_ui)
             tools_menu.addAction(scan_channels)
 
-            channel_mapping = QAction(tr("menu_mapping", "Mapping"), self.window)
+            channel_mapping = QAction(tr("menu_mapping", "Mapping\tCtrl+Shift+M"), self.window)
             channel_mapping.triggered.connect(self.window.open_channel_mapping)
             tools_menu.addAction(channel_mapping)
 
             tools_menu.addSeparator()
 
-            epg_timeline = QAction(tr("menu_epg_timeline", "EPG Timeline"), self.window)
+            epg_timeline = QAction(tr("menu_epg_timeline", "EPG Timeline\tCtrl+Shift+E"), self.window)
             epg_timeline.triggered.connect(self._show_epg_timeline)
             tools_menu.addAction(epg_timeline)
 
@@ -1478,7 +1489,7 @@ class UIController:
             tools_menu.addAction(search)
 
 
-            reminder_manager = QAction(tr("reminder_manager", "Reminder Manager"), self.window)
+            reminder_manager = QAction(tr("reminder_manager", "Reminder Manager\tCtrl+Shift+R"), self.window)
             reminder_manager.triggered.connect(self._show_reminder_manager)
             tools_menu.addAction(reminder_manager)
 
@@ -1490,11 +1501,15 @@ class UIController:
 
             tools_menu.addSeparator()
 
-            file_assoc = QAction(tr("menu_file_association", "File Association"), self.window)
-            file_assoc.triggered.connect(self.window._toggle_file_association)
-            tools_menu.addAction(file_assoc)
+            from utils.platform_utils import is_windows
+            if is_windows():
+                file_assoc = QAction(tr("menu_file_association", "File Association"), self.window)
+                file_assoc.triggered.connect(self.window._toggle_file_association)
+                tools_menu.addAction(file_assoc)
 
-            language_menu = menu_bar.addMenu(tr("language", "Language"))
+            tools_menu.addSeparator()
+
+            language_menu = tools_menu.addMenu(tr("language", "Language"))
 
             current_language = self.window.language_manager.current_language
 
@@ -1516,7 +1531,7 @@ class UIController:
             lang_group.addAction(chinese)
             lang_group.addAction(english)
 
-            theme_menu = menu_bar.addMenu(tr("menu_theme", "Theme"))
+            theme_menu = tools_menu.addMenu(tr("menu_theme", "Theme"))
 
             theme_manager = self.window._theme_manager
 
@@ -1548,7 +1563,7 @@ class UIController:
                 style_group.addAction(action)
                 visual_style_menu.addAction(action)
 
-            server_menu = menu_bar.addMenu(tr("menu_server", "Server"))
+            server_menu = tools_menu.addMenu(tr("menu_server", "Server"))
 
             server_toggle = QAction(tr("server_start", "启动Server"), self.window)
             server_toggle.triggered.connect(self.window._toggle_server)
@@ -1621,9 +1636,17 @@ class UIController:
         if not app:
             return
 
+        old = getattr(self.window, '_global_search_shortcut', None)
+        if old:
+            try:
+                old.setEnabled(False)
+                old.deleteLater()
+            except Exception:
+                pass
+
         search_shortcut = QShortcut(QKeySequence("Ctrl+Shift+F"), app)
         search_shortcut.activated.connect(self._show_global_search)
-        search_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        search_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         self.window._global_search_shortcut = search_shortcut
 
 

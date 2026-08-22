@@ -86,9 +86,16 @@ class SkipIntroOutroController(QObject):
             duration_ms = pc.get_total_time() if hasattr(pc, 'get_total_time') else 0
             duration_sec = duration_ms / 1000.0 if duration_ms else 0.0
             if duration_sec <= 0:
-                # duration 还未就绪，延迟 1s 再试一次
-                QTimer.singleShot(1000, self._on_file_loaded)
+                # duration 还未就绪，延迟 1s 再试一次（最多5次）
+                if not hasattr(self, '_duration_retry_count'):
+                    self._duration_retry_count = 0
+                self._duration_retry_count += 1
+                if self._duration_retry_count <= 5:
+                    QTimer.singleShot(1000, self._on_file_loaded)
+                else:
+                    self._duration_retry_count = 0
                 return
+            self._duration_retry_count = 0
             # 跳过秒数必须小于 duration 的 80%（避免误判整片为片头/片尾）
             if intro_enabled and 0 < intro_sec < duration_sec * 0.8:
                 self._intro_end_sec = intro_sec

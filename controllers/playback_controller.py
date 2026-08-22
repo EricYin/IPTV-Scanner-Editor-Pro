@@ -2,7 +2,6 @@ import os
 from typing import Dict, Any, Optional
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import QTimer, Qt
-from core.play_state import PlayMode
 from core.log_manager import global_logger as logger
 from controllers.main_window_protocol import MainWindowProtocol
 from ui.styles import AppStyles
@@ -168,7 +167,6 @@ class PlaybackController:
             self.window.volume_button.setIcon(QIcon(icon_path))
 
     def play_channel(self, channel: Dict[str, Any]):
-        from core.log_manager import global_logger as logger
 
         if self._is_switching:
             logger.debug("play_channel: 忽略重复的频道切换请求")
@@ -358,9 +356,6 @@ class PlaybackController:
         return self._is_muted
 
     def handle_play_state_change(self, is_playing):
-        from ui.styles import AppStyles
-        from PySide6.QtGui import QIcon
-        from core.log_manager import global_logger as logger
 
         w = self.window
         tr = w.language_manager.tr
@@ -371,6 +366,10 @@ class PlaybackController:
                 w.play_button.setIcon(QIcon(pause_path))
             w.pip_ctrl._update_play_btn()
             w._cancel_source_timeout()
+            for btn in ('stop_button', 'speed_button', 'aspect_button',
+                        'audio_track_button', 'sub_track_button', 'volume_slider'):
+                if hasattr(w, btn):
+                    getattr(w, btn).setEnabled(True)
             if hasattr(w, 'video_placeholder') and w.video_placeholder:
                 w.video_placeholder.hide()
             if hasattr(w, 'video_widget') and w.video_widget and w.video_frame:
@@ -398,7 +397,7 @@ class PlaybackController:
                 channel_name = w.current_channel.get('name', tr('unknown_channel', 'Unknown Channel'))
                 if w.play_state.is_catchup_or_timeshift:
                     catchup_playing_text = tr('catchup_playing', '正在回看: {name}')
-                    w.status_bar.showMessage(catchup_playing_text.format(name=channel_name))
+                    w.status_bar_show_message(catchup_playing_text.format(name=channel_name))
                     if getattr(w, '_pending_catchup_progress', None) is not None:
                         try:
                             progress_value = w._pending_catchup_progress
@@ -419,9 +418,13 @@ class PlaybackController:
             if play_path:
                 w.play_button.setIcon(QIcon(play_path))
             w.pip_ctrl._update_play_btn()
-            if hasattr(w, 'update_timer'):
+            if w.update_timer:
                 w.update_timer.stop()
             if w.play_state.is_idle:
+                for btn in ('stop_button', 'speed_button', 'aspect_button',
+                            'audio_track_button', 'sub_track_button'):
+                    if hasattr(w, btn):
+                        getattr(w, btn).setEnabled(False)
                 return
             if w.current_channel:
                 channel_name = w.current_channel.get('name', tr('unknown_channel', 'Unknown Channel'))
@@ -432,7 +435,6 @@ class PlaybackController:
                     w.status_bar_show_message(f"{tr('paused', 'Paused')}: {channel_name}")
 
     def seek_live(self, position):
-        from core.log_manager import global_logger as logger
 
         w = self.window
         if not w.current_channel or not w.player_controller:

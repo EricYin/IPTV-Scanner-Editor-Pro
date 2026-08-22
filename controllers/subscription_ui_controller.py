@@ -28,7 +28,7 @@ class SubscriptionUIController:
         epg_w = epg_widget or self.window.epg_list_widget
 
         if widget is None or epg_w is None:
-            logger.warning(f"load_subscription_sources_to_ui: widget为空")
+            logger.warning("load_subscription_sources_to_ui: widget为空")
             return
 
         widget.clear()
@@ -183,6 +183,9 @@ class SubscriptionUIController:
         if editing_index >= 0:
             getattr(self, cfg['manager_updater'])(mgr, editing_index, url, name)
             sources = getattr(self, cfg['manager_getter'])(mgr)
+            if editing_index >= len(sources):
+                self._set_editing_index(source_type, -1)
+                return
             updated_source = sources[editing_index]
             item = list_widget.item(editing_index)
             if item:
@@ -194,6 +197,8 @@ class SubscriptionUIController:
         else:
             index = getattr(self, cfg['manager_adder'])(mgr, url, name)
             sources = getattr(self, cfg['manager_getter'])(mgr)
+            if index is None or index < 0 or index >= len(sources):
+                return
             new_source = sources[index]
             item = QListWidgetItem(new_source.get('name', 'Unnamed'))
             item.setData(QtCore.Qt.ItemDataRole.UserRole, new_source)

@@ -8,6 +8,7 @@ import re
 
 from core.log_manager import global_logger as logger
 from controllers.main_window_protocol import MainWindowProtocol
+from utils.thread_safety import safe_single_shot
 
 
 class MediaController:
@@ -162,8 +163,6 @@ class MediaController:
         menu.addAction(tr("ctx_open_video", "Open Video\tCtrl+Shift+O"), lambda *a: self.window._open_video_file())
         menu.addAction(tr("ctx_scan", "Scan & Organize"), lambda *a: self.window.open_scan_ui())
 
-        # 网络流媒体增强入口
-        menu.addAction(tr("ctx_network_enhance", "Network Enhance..."), lambda *a: self._show_network_enhance_dialog())
 
         menu.exec(self.window.video_frame.mapToGlobal(pos))
 
@@ -866,8 +865,7 @@ class MediaController:
     def _on_scene_changed(self, params: dict, scene_type: str):
         """场景检测回调：在主线程应用参数"""
         try:
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(0, lambda: self._apply_scene_params(params, scene_type))
+            safe_single_shot(0, self.window, lambda: self._apply_scene_params(params, scene_type))
         except Exception as e:
             logger.debug(f"场景检测回调调度失败: {e}")
 

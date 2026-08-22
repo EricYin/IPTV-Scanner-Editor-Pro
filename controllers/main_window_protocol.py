@@ -5,7 +5,6 @@
 
 from typing import Protocol, Any, Optional, List, Dict, TypedDict, Deque, Set, runtime_checkable, TYPE_CHECKING
 from datetime import datetime, date
-from collections import deque
 
 from PySide6.QtWidgets import QStatusBar, QWidget, QSlider, QPushButton, QLabel, QListWidget, QComboBox, QTabWidget, QProgressBar, QLineEdit, QToolBar, QMenu
 from PySide6.QtCore import Qt, QTimer

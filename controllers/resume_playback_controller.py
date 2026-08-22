@@ -94,7 +94,12 @@ class ResumePlaybackController(QObject):
             if duration and duration > 0 and position + 3.0 >= duration:
                 return
             # 延迟 seek（等 mpv 真正开始播放）
-            QTimer.singleShot(400, lambda: self._do_seek(url, position))
+            def _safe_seek():
+                try:
+                    self._do_seek(url, position)
+                except RuntimeError:
+                    pass
+            QTimer.singleShot(400, _safe_seek)
         except Exception as e:
             logger.debug(f"自动恢复检查失败: {e}")
 

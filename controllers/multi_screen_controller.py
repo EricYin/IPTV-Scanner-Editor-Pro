@@ -1,8 +1,7 @@
-import os
 from typing import Dict, Optional, Any
 from PySide6.QtCore import QObject, QTimer
 from core.log_manager import global_logger as logger
-from ui.multi_screen_widget import MultiScreenWidget, MultiScreenCell
+from ui.multi_screen_widget import MultiScreenWidget
 
 
 class MultiScreenController(QObject):
@@ -185,8 +184,8 @@ class MultiScreenController(QObject):
         player = self._players.pop(index, None)
         if player:
             try:
-                player.stop()
                 player.terminate()
+                player.stop()
             except Exception as e:
                 logger.debug(f"停止cell播放器失败: {e}")
 
@@ -238,7 +237,7 @@ class MultiScreenController(QObject):
                 pass
 
     def _on_cell_clicked(self, index: int):
-        pass
+        logger.debug(f"多画面 cell {index} 被点击 (功能开发中)")
 
     def _on_global_mute_toggled(self, muted: bool):
         for index, player in list(self._players.items()):

@@ -5,16 +5,30 @@
 
 import os
 import re
-import threading
-from typing import Optional
+
 
 from PySide6 import QtCore, QtGui
-from PySide6.QtCore import Qt, QTimer, QThread, QMetaObject
+from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtWidgets import (
-    QFileDialog, QMessageBox, QComboBox, QApplication,
-    QCheckBox, QSpinBox, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QLineEdit, QGroupBox, QListWidget, QListWidgetItem,
-    QWidget, QFormLayout, QTextEdit, QFrame, QTabWidget, QScrollArea
+    QFileDialog,
+    QMessageBox,
+    QComboBox,
+    QApplication,
+    QCheckBox,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QLineEdit,
+    QGroupBox,
+    QListWidget,
+    QWidget,
+    QFormLayout,
+    QTextEdit,
+    QFrame,
+    QTabWidget,
+    QScrollArea,
 )
 
 from core.log_manager import global_logger as logger
@@ -27,6 +41,35 @@ from ui.theme_manager import get_theme_manager
 from core.version import CURRENT_VERSION
 from services.m3u_parser import load_m3u_file
 from controllers.main_window_protocol import MainWindowProtocol
+
+
+class _EpgLoadThread(QThread):
+    """EPG 数据加载线程（替代裸 daemon Thread，确保生命周期可管理）"""
+    def run(self):
+        try:
+            global_subscription_manager.load_all_epg_data()
+        except Exception as e:
+            logger.error(f"EPG数据加载失败: {e}")
+
+
+class _PlaylistReloadThread(QThread):
+    """播放列表重新加载线程（网络下载 + M3U 解析，完成后通知主线程刷新 UI）"""
+    reload_complete = Signal()
+    reload_error = Signal(str)
+
+    def __init__(self, window, url, source_index, parent=None):
+        super().__init__(parent)
+        self._window = window
+        self._url = url
+        self._source_index = source_index
+
+    def run(self):
+        try:
+            self._window._handle_playlist_subscription(True, self._url, self._source_index)
+            self.reload_complete.emit()
+        except Exception as e:
+            logger.error(f"重新加载播放列表失败: {e}")
+            self.reload_error.emit(str(e))
 
 
 # 使用说明默认内容 —— 定义在模块级别便于维护
@@ -212,7 +255,7 @@ class SettingsFileOperations:
         if self.window._center_dialog_on_screen:
             self.window._center_dialog_on_screen(dialog)
 
-        from ui.theme_manager import get_theme_manager
+
         try:
             tm = get_theme_manager()
             tm.register_window(dialog)
@@ -585,7 +628,7 @@ class SettingsFileOperations:
         v.addWidget(widget)
         desc = QLabel(desc_text)
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: gray; font-size: 11px;")
+        desc.setStyleSheet(f"color: {AppStyles._get_colors().get('mid', 'gray')}; font-size: 11px;")
         v.addWidget(desc)
         layout.addRow(label_text, container)
 
@@ -721,7 +764,9 @@ class SettingsFileOperations:
                 self._reload_playlist_async(new_playlist, new_active_index)
 
             if self._check_epg_changed(old_epg, new_epg):
-                threading.Thread(target=global_subscription_manager.load_all_epg_data, daemon=True).start()
+                epg_thread = _EpgLoadThread(self.window)
+                epg_thread.finished.connect(epg_thread.deleteLater)
+                epg_thread.start()
 
             dialog.close()
         except Exception as e:
@@ -967,18 +1012,12 @@ class SettingsFileOperations:
             return
         active = new_sources[new_active_index]
 
-        def _reload_and_refresh():
-            try:
-                self.window._handle_playlist_subscription(True, active.get('url', ''), new_active_index)
-                from utils.thread_safety import invoke_on_thread
-                if QThread.currentThread() != self.window.thread():
-                    invoke_on_thread(self.window, self.window._do_on_playlist_updated_in_main_thread)
-                else:
-                    self.window._do_on_playlist_updated_in_main_thread()
-            except Exception as e:
-                logger.error(f"重新加载播放列表失败: {e}")
-
-        threading.Thread(target=_reload_and_refresh, daemon=True).start()
+        thread = _PlaylistReloadThread(
+            self.window, active.get('url', ''), new_active_index, self.window
+        )
+        thread.reload_complete.connect(self.window._do_on_playlist_updated_in_main_thread)
+        thread.finished.connect(thread.deleteLater)
+        thread.start()
 
     # ==================== 语言 / 主题 ====================
 
@@ -1114,7 +1153,7 @@ class SettingsFileOperations:
         if self.window._center_dialog_on_screen:
             self.window._center_dialog_on_screen(dialog)
 
-        from ui.theme_manager import get_theme_manager
+
         try:
             tm2 = get_theme_manager()
             tm2.register_window(dialog)
@@ -1296,7 +1335,7 @@ class SettingsFileOperations:
             QMessageBox.critical(
                 self.window,
                 tr("error", "Error"),
-                tr("open_file_error", "Failed to load playlist:\n{error}").format(error=str(e))
+                tr("open_file_error", "Failed to load playlist. Please check the file format and try again.")
             )
 
     def _save_playlist_file(self, file_path: str):
@@ -1320,7 +1359,7 @@ class SettingsFileOperations:
             QMessageBox.critical(
                 self.window,
                 tr("error", "Error"),
-                tr("save_error", "Failed to save playlist:\n{error}").format(error=str(e))
+                tr("save_error", "Failed to save playlist. Please check the file path and permissions.")
             )
 
     @staticmethod
@@ -1419,7 +1458,7 @@ class SettingsFileOperations:
                 _handle_not_found()
             except Exception as ex:
                 logger.error(f"打开最近文件失败: {str(ex)}")
-                w.status_bar.showMessage(f"{tr('file_open_failed', 'Failed to open file')}: {str(ex)}")
+                w.status_bar.showMessage(tr('file_open_failed', 'Failed to open file'), 3000)
 
         if file_path.startswith('http'):
             _handle_url()
@@ -1430,10 +1469,7 @@ class SettingsFileOperations:
 
     def _open_stream(self):
         """打开串流地址"""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QPushButton, QCheckBox
-        from ui.floating_dialog import FloatingDialog
-        from ui.styles import AppStyles
-        from ui.theme_manager import get_theme_manager
+
         w = self.window
         tr = w.language_manager.tr
 
@@ -1511,7 +1547,7 @@ class SettingsFileOperations:
                 True: 强制按 M3U 列表解析，下载失败则提示用户，不回退到单流。
                 False: 自动判断（默认行为）。
         """
-        from core.log_manager import global_logger as logger
+
         from services.m3u_parser import parse_m3u_content, load_m3u_from_url_data
         from urllib.parse import urlparse
         w = self.window
@@ -1538,6 +1574,7 @@ class SettingsFileOperations:
             content = ''
             try:
                 import requests
+                from utils.http_session import get as _http_get
                 config = w.config
                 timeout = int(config.get_value('Network', 'timeout', '30') or 30)
                 from utils.general_utils import sanitize_http_header_value
@@ -1552,7 +1589,7 @@ class SettingsFileOperations:
                     headers['Referer'] = referer
 
                 ssl_verify = config.get_value('Network', 'ssl_verify', 'true').lower() != 'false'
-                response = requests.get(url, timeout=timeout, headers=headers,
+                response = _http_get(url, timeout=timeout, headers=headers,
                                         allow_redirects=True, verify=ssl_verify)
                 response.raise_for_status()
                 content = load_m3u_from_url_data(response.content)
@@ -1566,7 +1603,7 @@ class SettingsFileOperations:
                     QMessageBox.warning(
                         w, tr("open_stream", "打开串流"),
                         tr("m3u_download_failed_prompt",
-                           "无法下载列表内容：\n{error}\n\n请检查网络或地址是否正确。").format(error=str(e))
+                           "无法下载列表内容，请检查网络或地址是否正确。")
                     )
                     return
                 # 否则回退到作为单频道串流处理（不 return）

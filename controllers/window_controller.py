@@ -4,12 +4,12 @@
 """
 
 import os
-from PySide6.QtWidgets import QWidget, QLabel, QPushButton, QHBoxLayout, QMainWindow, QLineEdit, QComboBox
+from PySide6.QtWidgets import QWidget, QLabel, QPushButton, QHBoxLayout, QLineEdit, QComboBox
 from PySide6.QtCore import Qt, QPoint, QSize
-from PySide6.QtGui import QPixmap, QIcon
+from PySide6.QtGui import QIcon
 from ui.styles import AppStyles
 from controllers.main_window_protocol import MainWindowProtocol
-from utils.platform_utils import is_wayland, wayland_move, is_linux
+from utils.platform_utils import is_wayland, wayland_move
 
 
 class WindowController:
@@ -150,10 +150,20 @@ class WindowController:
             if icon_path:
                 self._stay_on_top_btn.setIcon(QIcon(icon_path))
             accent = AppStyles._get_colors().get('accent', '#0078d4')
-            r, g, b = int(accent[1:3], 16), int(accent[3:5], 16), int(accent[5:7], 16)
+            try:
+                if len(accent) == 7:
+                    r, g, b = int(accent[1:3], 16), int(accent[3:5], 16), int(accent[5:7], 16)
+                elif len(accent) == 4:
+                    r, g, b = int(accent[1]*2, 16), int(accent[2]*2, 16), int(accent[3]*2, 16)
+                else:
+                    r, g, b = 0, 120, 212
+            except (ValueError, IndexError):
+                r, g, b = 0, 120, 212
+            base_style = self._title_btn_style().rstrip()
+            if base_style.endswith('}'):
+                base_style = base_style[:-1]
             self._stay_on_top_btn.setStyleSheet(
-                self._title_btn_style().replace("}", "") +
-                f" background-color: rgba({r}, {g}, {b}, 0.25); }}"
+                base_style + f" background-color: rgba({r}, {g}, {b}, 0.25); }}"
             )
         else:
             self.window.setWindowFlags(flags & ~Qt.WindowType.WindowStaysOnTopHint)

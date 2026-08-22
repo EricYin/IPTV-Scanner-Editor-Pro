@@ -4,6 +4,7 @@ from typing import Optional
 from PySide6.QtCore import QObject
 
 from core.log_manager import global_logger as logger
+from utils.thread_safety import safe_single_shot
 
 
 class BookmarkController(QObject):
@@ -129,7 +130,14 @@ class BookmarkController(QObject):
             if resume_ctrl and hasattr(resume_ctrl, 'set_skip_next_resume'):
                 resume_ctrl.set_skip_next_resume(url)
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(100, lambda: self.window.play_channel(channel))
+
+            def _play_channel_safe():
+                try:
+                    self.window.play_channel(channel)
+                except RuntimeError:
+                    pass
+
+            safe_single_shot(100, self.window, _play_channel_safe)
         except Exception as e:
             logger.error(f"跳转书签失败: {e}")
 
@@ -150,7 +158,14 @@ class BookmarkController(QObject):
             self._pending_seek_position = 0.0
             # 延迟 seek（等 mpv 真正开始播放）
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(400, lambda: self._do_pending_seek(url, position))
+
+            def _seek_safe():
+                try:
+                    self._do_pending_seek(url, position)
+                except RuntimeError:
+                    pass
+
+            safe_single_shot(400, self.window, _seek_safe)
         except Exception as e:
             logger.debug(f"书签恢复检查失败: {e}")
             self._pending_seek_url = None

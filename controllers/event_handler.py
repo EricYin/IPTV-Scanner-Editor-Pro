@@ -5,6 +5,7 @@
 
 from PySide6.QtCore import Qt, QEvent, QTimer
 from controllers.main_window_protocol import MainWindowProtocol
+from utils.thread_safety import safe_single_shot
 
 
 class EventHandler:
@@ -63,8 +64,7 @@ class EventHandler:
             if event_type == QEvent.Type.Leave:
                 if obj is self.window or obj is getattr(self.window, 'video_widget', None) or obj is getattr(self.window, 'central_widget', None):
                     if hasattr(self.window, '_delayed_hide_floating_panels'):
-                        from PySide6.QtCore import QTimer
-                        QTimer.singleShot(200, self.window._delayed_hide_floating_panels)
+                        safe_single_shot(200, self.window, self.window._delayed_hide_floating_panels)
             elif event_type == QEvent.Type.Enter:
                 if obj is self.window or obj is getattr(self.window, 'video_widget', None):
                     if hasattr(self.window, '_show_floating_panels_on_enter'):
@@ -98,7 +98,7 @@ class EventHandler:
         if modifiers == Qt.KeyboardModifier.NoModifier:
             global_keys = (Qt.Key.Key_Space, Qt.Key.Key_Escape,
                            Qt.Key.Key_F, Qt.Key.Key_E,
-                           Qt.Key.Key_L, Qt.Key.Key_J,
+                           Qt.Key.Key_L,
                            Qt.Key.Key_Y, Qt.Key.Key_Tab,
                            Qt.Key.Key_F5, Qt.Key.Key_F11,
                            Qt.Key.Key_Backspace, Qt.Key.Key_S,
@@ -135,6 +135,8 @@ class EventHandler:
             if key == Qt.Key.Key_O:
                 return True
             if key == Qt.Key.Key_B:
+                return True
+            if key in (Qt.Key.Key_S, Qt.Key.Key_M, Qt.Key.Key_E, Qt.Key.Key_R, Qt.Key.Key_F):
                 return True
             if key in (Qt.Key.Key_Left, Qt.Key.Key_Right) and self._is_main_window_focused():
                 return True
@@ -364,6 +366,10 @@ class EventHandler:
                     if hasattr(w, 'toggle_mute'):
                         w.toggle_mute()
                     return True
+                elif key == Qt.Key.Key_M:
+                    if hasattr(w, 'toggle_mute'):
+                        w.toggle_mute()
+                    return True
 
             elif modifiers == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
                 if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):
@@ -381,6 +387,26 @@ class EventHandler:
                 elif key == Qt.Key.Key_B:
                     if hasattr(w, 'media_ctrl'):
                         w.media_ctrl.add_bookmark_now()
+                    return True
+                elif key == Qt.Key.Key_S:
+                    if hasattr(w, 'open_scan_ui'):
+                        w.open_scan_ui()
+                    return True
+                elif key == Qt.Key.Key_M:
+                    if hasattr(w, 'open_channel_mapping'):
+                        w.open_channel_mapping()
+                    return True
+                elif key == Qt.Key.Key_E:
+                    if hasattr(w, 'ui_ctrl') and hasattr(w.ui_ctrl, '_show_epg_timeline'):
+                        w.ui_ctrl._show_epg_timeline()
+                    return True
+                elif key == Qt.Key.Key_R:
+                    if hasattr(w, 'ui_ctrl') and hasattr(w.ui_ctrl, '_show_reminder_manager'):
+                        w.ui_ctrl._show_reminder_manager()
+                    return True
+                elif key == Qt.Key.Key_F:
+                    if hasattr(w, 'ui_ctrl') and hasattr(w.ui_ctrl, '_show_global_search'):
+                        w.ui_ctrl._show_global_search()
                     return True
 
         except Exception as e:
@@ -453,9 +479,8 @@ class EventHandler:
                       hasattr(self.window, 'floating_dock') and self.window.floating_dock)
 
         if has_panels and not getattr(self.window, '_initial_position_fixed', False):
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(50, self._deferred_position_docks)
-            QTimer.singleShot(200, self._deferred_position_docks)
+            safe_single_shot(50, self.window, self._deferred_position_docks)
+            safe_single_shot(200, self.window, self._deferred_position_docks)
 
     def _deferred_position_docks(self):
         """延迟到事件循环下一帧执行定位（确保主窗口geometry已稳定）"""
@@ -482,6 +507,7 @@ class EventHandler:
                 self.window.playlist_visible = settings.get('playlist_visible', True)
                 self.window.floating_panel_visible = settings.get('floating_visible', True)
 
+                epg_w = 280
                 if hasattr(self.window, 'epg_dock') and self.window.epg_dock:
                     epg_w = max(200, settings.get('epg_width', 280))
                     self.window.epg_dock.setMinimumWidth(epg_w)
@@ -544,7 +570,7 @@ class EventHandler:
     def _schedule_position_update(self):
         if not hasattr(self, '_position_timer'):
             from PySide6.QtCore import QTimer
-            self._position_timer = QTimer()
+            self._position_timer = QTimer(self.window)
             self._position_timer.setSingleShot(True)
             self._position_timer.setInterval(16)
             self._position_timer.timeout.connect(self._do_position_update)
@@ -611,6 +637,12 @@ class EventHandler:
                     timer.stop()
                 except Exception as e:
                     logger.debug(f"停止定时器{attr}失败: {e}")
+        sub_ctrl = getattr(self.window, 'subscription_ctrl', None)
+        if sub_ctrl and hasattr(sub_ctrl, '_refresh_timer') and sub_ctrl._refresh_timer:
+            try:
+                sub_ctrl._refresh_timer.stop()
+            except Exception as e:
+                logger.debug(f"停止订阅刷新定时器失败: {e}")
         if hasattr(self, '_position_timer'):
             try:
                 self._position_timer.stop()
@@ -704,6 +736,14 @@ class EventHandler:
             except Exception as e:
                 logger.debug(f"停止FCC服务失败: {e}")
 
+        # 6.85 清理代理样式
+        proxy_style = getattr(self.window, '_menu_proxy_style', None)
+        if proxy_style:
+            try:
+                proxy_style.deleteLater()
+            except Exception as e:
+                logger.debug(f"清理代理样式失败: {e}")
+
         # 6.9 清理系统托盘
         tray = getattr(self.window, '_system_tray', None)
         if tray:
@@ -720,6 +760,13 @@ class EventHandler:
             cleanup_all()
         except Exception as e:
             logger.debug(f"执行资源清理器失败: {e}")
+
+        # 6.11 刷新配置写入（确保防抖的save_config落盘）
+        try:
+            if hasattr(self.window, 'config'):
+                self.window.config.flush()
+        except Exception as e:
+            logger.debug(f"刷新配置写入失败: {e}")
 
         # 7. 等待后台工作线程完成
         if hasattr(self.window, 'subscription_ctrl'):
@@ -740,6 +787,9 @@ class EventHandler:
             'settings_ops', 'ui_ctrl', 'subscription_ctrl', 'subscription_ui_ctrl',
             'catchup_ctrl', 'pip_ctrl', 'media_ctrl', 'update_ctrl',
             'favorites_ctrl', 'epg_reminder_ctrl', 'event_handler',
+            'multi_screen_ctrl', 'progress_ctrl', 'file_queue_ctrl',
+            'resume_ctrl', 'playback_settings_ctrl', 'skip_intro_outro_ctrl',
+            'bookmark_ctrl', 'autocrop_service', 'undo_stack', 'clip_export_service',
         ]
         for attr in controller_attrs:
             ctrl = getattr(self.window, attr, None)
@@ -750,14 +800,39 @@ class EventHandler:
                 except Exception as e:
                     logger.debug(f"断开控制器{attr}引用失败: {e}")
 
+        # 7.6 清理音视频/歌词 widget
+        for widget_attr in ('_audio_visual_widget', '_lyrics_widget'):
+            widget = getattr(self.window, widget_attr, None)
+            if widget:
+                try:
+                    if hasattr(widget, 'stop'):
+                        widget.stop()
+                    widget.hide()
+                    widget.deleteLater()
+                except Exception as e:
+                    logger.debug(f"清理{widget_attr}失败: {e}")
+                setattr(self.window, widget_attr, None)
+
+        # 7.7 清理 server 全局引用
+        try:
+            from server.app import set_main_window
+            set_main_window(None)
+        except Exception:
+            pass
+        try:
+            from server.context import ServerContext
+            ServerContext._instance = None
+        except Exception:
+            pass
+
         # 8. 退出应用
         event.accept()
 
         from PySide6.QtWidgets import QApplication
         try:
             QApplication.instance().quit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"应用退出失败: {e}")
 
     def register_shortcut(self, key_sequence: str, callback):
         """注册自定义快捷键"""

@@ -17,6 +17,7 @@ from utils.general_utils import get_display_channel_name
 from controllers.main_window_protocol import MainWindowProtocol
 from services.stream_quality_scorer import StreamQualityScorer
 from ui.quality_bar import QualityBarWidget
+from utils.thread_safety import safe_single_shot
 
 
 class ChannelController:
@@ -76,6 +77,8 @@ class ChannelController:
 
         list_widget.clear()
 
+        if hasattr(w, '_icon_load_timer') and w._icon_load_timer:
+            w._icon_load_timer.stop()
         if w._icon_load_set:
             w._icon_load_set.clear()
         if w._icon_load_queue:
@@ -208,7 +211,7 @@ class ChannelController:
             list_widget.verticalScrollBar().valueChanged.connect(w._on_channel_list_scrolled, Qt.ConnectionType.UniqueConnection)
         except TypeError:
             pass
-        QTimer.singleShot(50, lambda: self.load_visible_icons(list_widget, channels))
+        safe_single_shot(50, self.window, lambda: self.load_visible_icons(list_widget, channels))
 
     def load_visible_icons(self, list_widget, channels):
         w = self.window
@@ -216,7 +219,7 @@ class ChannelController:
         if not w._icon_load_queue:
             w._icon_load_queue = deque()
             w._icon_load_set = set()
-            w._icon_load_timer = QTimer()
+            w._icon_load_timer = QTimer(w)
             w._icon_load_timer.setInterval(16)
             w._icon_load_timer.timeout.connect(w._process_icon_load_batch)
 

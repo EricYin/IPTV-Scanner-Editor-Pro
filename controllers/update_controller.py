@@ -68,6 +68,8 @@ class UpdateCheckThread(QThread):
     check_completed = Signal(bool, str)
 
     def run(self):
+        from core.language_manager import LanguageManager
+        tr = LanguageManager().tr
         loop = None
         try:
             loop = asyncio.new_event_loop()
@@ -83,16 +85,17 @@ class UpdateCheckThread(QThread):
             if latest_version and not latest_version.startswith("("):
                 if self._is_newer_version(current_version, latest_version):
                     self.update_found.emit(latest_version, current_version, download_url or "")
-                    self.check_completed.emit(True, f"发现新版本: {latest_version}")
+                    self.check_completed.emit(True, tr('update_found', '发现新版本: {}').format(latest_version))
                 else:
-                    self.check_completed.emit(True, "当前已是最新版本")
+                    self.check_completed.emit(True, tr('already_latest', '当前已是最新版本'))
             else:
-                self.check_completed.emit(False, f"版本检查失败: {latest_version}")
+                self.check_completed.emit(False, tr('version_check_failed', '版本检查失败'))
 
         except asyncio.TimeoutError:
-            self.check_completed.emit(False, "版本检查超时")
+            self.check_completed.emit(False, tr('version_check_timeout', '版本检查超时'))
         except Exception as e:
-            self.check_completed.emit(False, f"版本检查异常: {str(e)}")
+            logger.error(f"版本检查异常: {e}")
+            self.check_completed.emit(False, tr('version_check_error', '版本检查异常'))
         finally:
             try:
                 if loop:
@@ -184,13 +187,16 @@ class UpdateDownloadThread(QThread):
         self._cancel = False
 
     def run(self):
+        from core.language_manager import LanguageManager
+        tr = LanguageManager().tr
         loop = None
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self._download())
         except Exception as e:
-            self.download_error.emit(f"下载失败: {str(e)}")
+            logger.error(f"下载失败: {e}")
+            self.download_error.emit(tr('download_failed', '下载失败'))
         finally:
             try:
                 if loop:
@@ -202,11 +208,13 @@ class UpdateDownloadThread(QThread):
         """异步下载更新文件"""
         import aiohttp
         import hashlib
+        from core.language_manager import LanguageManager
+        tr = LanguageManager().tr
 
         asset_name = _get_platform_asset_name() or "isep_update_file"
         filepath = os.path.join(tempfile.gettempdir(), asset_name)
 
-        self.progress.emit(0, "正在连接服务器...")
+        self.progress.emit(0, tr('connecting_server', '正在连接服务器...'))
 
         async with aiohttp.ClientSession() as session:
             # 优先从 Release 下载 SHA256 校验文件
@@ -223,7 +231,7 @@ class UpdateDownloadThread(QThread):
                         # SHA256 文件格式: <hash>  <filename> 或纯 hash
                         expected_sha256 = sha_text.split()[0] if sha_text else None
                         if expected_sha256 and len(expected_sha256) == 64:
-                            self.progress.emit(0, "已获取 SHA256 校验值")
+                            self.progress.emit(0, tr('sha256_acquired', '已获取 SHA256 校验值'))
                         else:
                             expected_sha256 = None
             except Exception:
@@ -235,7 +243,8 @@ class UpdateDownloadThread(QThread):
                 timeout=aiohttp.ClientTimeout(total=600)
             ) as response:
                 if response.status != 200:
-                    self.download_error.emit(f"下载失败: HTTP {response.status}")
+                    logger.error(f"下载失败: HTTP {response.status}")
+                    self.download_error.emit(tr('download_failed', '下载失败'))
                     return
 
                 total = int(response.headers.get('Content-Length', 0))
@@ -256,10 +265,10 @@ class UpdateDownloadThread(QThread):
                         downloaded += len(chunk)
                         if total > 0:
                             percent = int(downloaded * 100 / total)
-                            msg = f"已下载 {downloaded // 1048576}MB / {total // 1048576}MB"
+                            msg = tr('downloaded_progress', '已下载 {}MB / {}MB').format(downloaded // 1048576, total // 1048576)
                             self.progress.emit(percent, msg)
                         else:
-                            msg = f"已下载 {downloaded // 1048576}MB"
+                            msg = tr('downloaded', '已下载 {}MB').format(downloaded // 1048576)
                             self.progress.emit(-1, msg)
 
                 # SHA256 完整性校验
@@ -270,19 +279,52 @@ class UpdateDownloadThread(QThread):
                             os.remove(filepath)
                         except OSError:
                             pass
-                        self.download_error.emit(
-                            f"文件校验失败: SHA256 不匹配\n"
-                            f"期望: {expected_sha256[:16]}...\n"
-                            f"实际: {actual_sha256[:16]}..."
-                        )
+                        logger.error(f"文件校验失败: SHA256 不匹配, 期望: {expected_sha256[:16]}..., 实际: {actual_sha256[:16]}...")
+                        self.download_error.emit(tr('checksum_failed', '文件校验失败: SHA256 不匹配'))
                         return
-                    self.progress.emit(100, "文件校验通过")
+                    self.progress.emit(100, tr('checksum_passed', '文件校验通过'))
 
                 self.download_complete.emit(filepath)
 
     def cancel(self):
         """取消下载"""
         self._cancel = True
+
+
+class _InstallExtractThread(QThread):
+    """安装前解压线程（macOS/Linux），避免 subprocess.run 阻塞主线程"""
+    extract_complete = Signal(str, str)  # platform_name, extracted_path
+    extract_error = Signal(str)
+
+    def __init__(self, platform_name: str, filepath: str, parent=None):
+        super().__init__(parent)
+        self._platform_name = platform_name
+        self._filepath = filepath
+
+    def run(self):
+        from core.language_manager import LanguageManager
+        tr = LanguageManager().tr
+        try:
+            if self._platform_name == "Darwin":
+                subprocess.run(
+                    ['unzip', '-o', self._filepath, '-d', tempfile.gettempdir()],
+                    check=True, timeout=120
+                )
+                new_app = os.path.join(tempfile.gettempdir(), "ISEP.app")
+                self.extract_complete.emit("Darwin", new_app)
+            elif self._platform_name == "Linux":
+                extract_dir = tempfile.mkdtemp()
+                subprocess.run(
+                    ['tar', 'xzf', self._filepath, '-C', extract_dir],
+                    check=True, timeout=120
+                )
+                new_exe = os.path.join(extract_dir, "ISEP")
+                self.extract_complete.emit("Linux", new_exe)
+        except subprocess.TimeoutExpired:
+            self.extract_error.emit(tr('extract_timeout', '解压超时'))
+        except Exception as e:
+            logger.error(f"解压失败: {e}")
+            self.extract_error.emit(tr('extract_failed', '解压失败'))
 
 
 class UpdateController:
@@ -299,6 +341,7 @@ class UpdateController:
         self._download_thread = None
         self._progress_dialog = None
         self._pending_download = False
+        self._extract_thread = None
 
     def check_for_updates(self):
         """异步检查新版本"""
@@ -387,7 +430,12 @@ class UpdateController:
         # 如果从源码运行（非打包），无法自动安装，打开文件夹让用户手动操作
         if not _is_frozen():
             if platform.system() == "Windows":
-                subprocess.Popen(f'explorer /select,"{filepath}"')
+
+                norm = os.path.normpath(filepath)
+                if os.path.isfile(norm) or os.path.isdir(os.path.dirname(norm)):
+                    subprocess.Popen(['explorer', '/select,', norm])
+                else:
+                    subprocess.Popen(['explorer', os.path.dirname(norm)])
             elif platform.system() == "Darwin":
                 subprocess.Popen(['open', os.path.dirname(filepath)])
             else:
@@ -412,6 +460,7 @@ class UpdateController:
             self._install_update(filepath)
 
     def _on_download_error(self, message):
+        logger.error(f"下载更新失败: {message}")
         if self._progress_dialog:
             self._progress_dialog.close()
             self._progress_dialog = None
@@ -421,7 +470,7 @@ class UpdateController:
         QMessageBox.critical(
             self.window,
             tr("update_progress_title", "Online Update"),
-            f"{tr('update_error', 'Update Failed')}: {message}"
+            tr('update_error', 'Update Failed. Please check your network and try again.')
         )
 
     def _on_download_canceled(self):
@@ -447,7 +496,7 @@ class UpdateController:
             QMessageBox.critical(
                 self.window,
                 tr("update_progress_title", "Online Update"),
-                f"{tr('update_error', 'Update Failed')}: {str(e)}"
+                tr('update_error', 'Update Failed. Please try again.')
             )
 
     def _install_windows(self, filepath):
@@ -482,15 +531,15 @@ class UpdateController:
         QApplication.quit()
 
     def _install_macos(self, filepath):
-        """macOS: 解压 zip 并替换 .app bundle"""
-        import shlex
+        """macOS: 解压 zip 并替换 .app bundle（解压在子线程，避免阻塞主线程）"""
+        self._extract_thread = _InstallExtractThread("Darwin", filepath, self.window)
+        self._extract_thread.extract_complete.connect(self._on_macos_extract_complete)
+        self._extract_thread.extract_error.connect(self._on_extract_error)
+        self._extract_thread.finished.connect(self._extract_thread.deleteLater)
+        self._extract_thread.start()
 
-        # 解压到临时目录
-        subprocess.run(
-            ['unzip', '-o', filepath, '-d', tempfile.gettempdir()],
-            check=True
-        )
-        new_app = os.path.join(tempfile.gettempdir(), "ISEP.app")
+    def _on_macos_extract_complete(self, _, new_app):
+        import shlex
 
         # 获取当前 .app 路径
         # sys.executable: /path/to/App.app/Contents/MacOS/App
@@ -520,15 +569,16 @@ class UpdateController:
         QApplication.quit()
 
     def _install_linux(self, filepath):
-        """Linux: 解压 tar.gz 并替换可执行文件"""
+        """Linux: 解压 tar.gz 并替换可执行文件（解压在子线程，避免阻塞主线程）"""
+        self._extract_thread = _InstallExtractThread("Linux", filepath, self.window)
+        self._extract_thread.extract_complete.connect(self._on_linux_extract_complete)
+        self._extract_thread.extract_error.connect(self._on_extract_error)
+        self._extract_thread.finished.connect(self._extract_thread.deleteLater)
+        self._extract_thread.start()
+
+    def _on_linux_extract_complete(self, _, new_exe):
         import shlex
 
-        extract_dir = tempfile.mkdtemp()
-        subprocess.run(
-            ['tar', 'xzf', filepath, '-C', extract_dir],
-            check=True
-        )
-        new_exe = os.path.join(extract_dir, "ISEP")
         current_exe = sys.executable
 
         # 安全：使用 shlex.quote 转义路径，防止 shell 注入
@@ -553,6 +603,16 @@ class UpdateController:
 
         from PySide6.QtWidgets import QApplication
         QApplication.quit()
+
+    def _on_extract_error(self, message):
+        logger.error(f"解压失败: {message}")
+        language_manager = self.window.language_manager
+        tr = language_manager.tr
+        QMessageBox.critical(
+            self.window,
+            tr("update_progress_title", "Online Update"),
+            tr('update_error', 'Update Failed. Please try again.')
+        )
 
     def _on_update_found(self, latest_version, current_version, download_url=""):
         """发现新版本时的处理"""
@@ -610,5 +670,5 @@ class UpdateController:
                 QMessageBox.information(
                     self.window,
                     tr("update_progress_title", "Online Update"),
-                    message if not success else tr("update_success", "已是最新版本")
+                    tr("update_success", "已是最新版本") if success else tr('update_error', 'Update Failed.')
                 )
