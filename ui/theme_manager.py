@@ -24,22 +24,37 @@ class ThemeManager(Singleton, QtCore.QObject):
         AppStyles.set_color_mode(self._color_mode)
         AppStyles.set_visual_style(self._visual_style)
         self._system_theme_timer = None
+        self._system_theme_style_hints = None
         if self._color_mode == 'auto':
             self._start_system_theme_watcher()
         self._initialized = True
 
     def _start_system_theme_watcher(self):
-        if self._system_theme_timer is not None:
+        if self._system_theme_timer is not None or self._system_theme_style_hints is not None:
             return
+        self._last_detected_mode = AppStyles._detect_system_color_mode()
+        try:
+            from PySide6.QtGui import QGuiApplication
+            style_hints = QGuiApplication.styleHints()
+            style_hints.colorSchemeChanged.connect(self._check_system_theme_change)
+            self._system_theme_style_hints = style_hints
+            return
+        except Exception:
+            pass
         self._system_theme_timer = QtCore.QTimer(self)
         self._system_theme_timer.timeout.connect(self._check_system_theme_change)
         self._system_theme_timer.start(3000)
-        self._last_detected_mode = AppStyles._detect_system_color_mode()
 
     def _stop_system_theme_watcher(self):
         if self._system_theme_timer is not None:
             self._system_theme_timer.stop()
             self._system_theme_timer = None
+        if self._system_theme_style_hints is not None:
+            try:
+                self._system_theme_style_hints.colorSchemeChanged.disconnect(self._check_system_theme_change)
+            except Exception:
+                pass
+            self._system_theme_style_hints = None
 
     def _check_system_theme_change(self):
         if self._color_mode != 'auto':
@@ -53,6 +68,7 @@ class ThemeManager(Singleton, QtCore.QObject):
     def register_window(self, window: QtWidgets.QWidget):
         if window not in self._windows:
             self._windows.append(window)
+            window.destroyed.connect(lambda _=None, w=window: self.unregister_window(w))
             self._apply_theme_to_window(window)
 
     def unregister_window(self, window: QtWidgets.QWidget):
@@ -82,7 +98,8 @@ class ThemeManager(Singleton, QtCore.QObject):
             QtWidgets.QApplication.processEvents()
         except Exception as e:
             window.setUpdatesEnabled(True)
-            print(f"应用主题到窗口失败: {e}")
+            from core.log_manager import global_logger as logger
+            logger.error(f"应用主题到窗口失败: {e}")
 
     def _apply_window_backdrop(self, window):
         try:
@@ -109,7 +126,8 @@ class ThemeManager(Singleton, QtCore.QObject):
                         else:
                             self._disable_dwm_blur(dock)
         except Exception as e:
-            print(f"设置窗口背景模糊失败: {e}")
+            from core.log_manager import global_logger as logger
+            logger.error(f"设置窗口背景模糊失败: {e}")
 
     def _enable_dwm_blur(self, window):
         if is_android():
@@ -232,7 +250,8 @@ class ThemeManager(Singleton, QtCore.QObject):
             if pc and hasattr(pc, 'player') and hasattr(pc.player, 'update_osd_theme'):
                 pc.player.update_osd_theme()
         except Exception as e:
-            print(f"重刷主窗口组件样式失败: {e}")
+            from core.log_manager import global_logger as logger
+            logger.error(f"重刷主窗口组件样式失败: {e}")
 
     def _reapply_title_bar_icons(self, window):
         """主题切换时重新生成标题栏按钮图标，使图标颜色跟随主题变化"""
@@ -301,7 +320,8 @@ class ThemeManager(Singleton, QtCore.QObject):
                     if tv_icon_path:
                         title_icon_label.setPixmap(QIcon(tv_icon_path).pixmap(16, 16))
         except Exception as e:
-            print(f"重刷标题栏图标失败: {e}")
+            from core.log_manager import global_logger as logger
+            logger.error(f"重刷标题栏图标失败: {e}")
 
     def _is_in_dock(self, widget):
         w = widget.parent()
@@ -373,22 +393,27 @@ class ThemeManager(Singleton, QtCore.QObject):
             ),
             QtWidgets.QFrame: lambda w: None if hasattr(w, 'style_type') else None,
         }
-        for widget_type, style_func in style_map.items():
-            try:
-                for widget in parent.findChildren(widget_type):
-                    if self._is_in_managed_widget(widget):
-                        continue
+        spin_style = AppStyles.common_spin_box_style() if hasattr(AppStyles, 'common_spin_box_style') else None
+
+        all_widgets = parent.findChildren(QtWidgets.QWidget)
+        for widget in all_widgets:
+            if self._is_in_managed_widget(widget):
+                continue
+            widget_type = type(widget)
+            style_func = style_map.get(widget_type)
+            if style_func:
+                try:
                     style = style_func(widget)
                     if style:
                         widget.setStyleSheet(style)
-            except Exception:
-                pass
-        try:
-            if hasattr(AppStyles, 'common_spin_box_style'):
-                for spin_box in parent.findChildren(QtWidgets.QSpinBox):
-                    spin_box.setStyleSheet(AppStyles.common_spin_box_style())
-        except Exception:
-            pass
+                except Exception:
+                    pass
+            elif widget_type is QtWidgets.QSpinBox and spin_style:
+                try:
+                    widget.setStyleSheet(spin_style)
+                except Exception:
+                    pass
+
 
     def get_current_theme(self) -> str:
         return self._current_theme

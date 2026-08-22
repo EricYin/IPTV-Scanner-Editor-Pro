@@ -79,6 +79,8 @@ class MenuRoundedProxyStyle(QProxyStyle):
 
     @staticmethod
     def _create_rounded_clip_region(rect, radius):
+        if rect.width() <= 0 or rect.height() <= 0:
+            return QRegion()
         bitmap = QBitmap(rect.width(), rect.height())
         bitmap.clear()
         bmp_painter = QPainter(bitmap)

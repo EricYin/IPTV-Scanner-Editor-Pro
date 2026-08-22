@@ -1,5 +1,4 @@
 import json
-import sys
 from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QGridLayout, QLabel, QSlider, QToolButton,
@@ -7,7 +6,7 @@ from PySide6.QtWidgets import (
     QListWidget
 )
 from PySide6.QtCore import Qt, Signal, QMimeData, QByteArray, QSize
-from PySide6.QtGui import QDrag, QPainter, QColor, QPen, QIcon
+from PySide6.QtGui import QDrag, QPainter, QPen, QIcon
 from ui.styles import AppStyles
 
 
@@ -117,9 +116,8 @@ class MultiScreenCell(QWidget):
         self._video_frame = QFrame()
         self._video_frame.setStyleSheet(AppStyles.player_background_style())
         self._video_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        needs_native_window = (
-            (sys.platform.startswith('linux') and not getattr(sys, 'platform', '') == 'android')
-        )
+        from utils.platform_utils import is_linux
+        needs_native_window = is_linux()
         if needs_native_window:
             self._video_frame.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
             self._video_frame.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors, True)
@@ -195,6 +193,12 @@ class MultiScreenCell(QWidget):
         self._audio_combo.show()
 
     def clear_channel(self):
+        if self._player is not None:
+            try:
+                self._player.stop()
+            except Exception:
+                pass
+            self._player = None
         self._channel = None
         self._is_playing = False
         self._channel_label.setText('')
@@ -253,7 +257,7 @@ class MultiScreenCell(QWidget):
         self.update()
         if event.mimeData().hasFormat('application/x-channel'):
             data = event.mimeData().data('application/x-channel')
-            import json
+
             try:
                 channel = json.loads(bytes(data).decode('utf-8'))
                 self.channel_dropped.emit(self._index, channel)
@@ -420,6 +424,7 @@ class MultiScreenWidget(QWidget):
         self._grid_count = count
         old_cells = list(self._cells)
         for cell in old_cells:
+            cell.clear_channel()
             self._grid_layout.removeWidget(cell)
             cell.setParent(None)
             cell.deleteLater()
@@ -473,7 +478,12 @@ class MultiScreenWidget(QWidget):
         color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
         if muted:
             icon_path = AppStyles.get_icon('volume_mute', color, 14)
-            self._mute_label.setText("Muted")
+
+            try:
+                from core.language_manager import LanguageManager
+                self._mute_label.setText(LanguageManager().tr('muted', 'Muted'))
+            except Exception:
+                self._mute_label.setText("Muted")
         else:
             icon_path = AppStyles.get_icon('volume', color, 14)
             self._mute_label.setText("")

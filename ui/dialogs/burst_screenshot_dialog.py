@@ -1,8 +1,15 @@
 """连拍截图对话框 - 定时连续截图"""
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QSpinBox, QDoubleSpinBox, QProgressBar, QGroupBox, QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+    QDoubleSpinBox,
+    QProgressBar,
+    QGroupBox,
 )
 
 from ui.floating_dialog import FloatingDialog
@@ -37,6 +44,9 @@ class BurstScreenshotDialog(FloatingDialog):
         except Exception:
             pass
         self._update_ui_state()
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -109,16 +119,19 @@ class BurstScreenshotDialog(FloatingDialog):
         btn_row = QHBoxLayout()
         self.start_btn = QPushButton(tr('burst_screenshot_start', 'Start'))
         self.start_btn.clicked.connect(self._start_burst)
+        self.start_btn.setToolTip(tr('burst_start_tooltip', '开始连拍'))
         btn_row.addWidget(self.start_btn)
 
         self.stop_btn = QPushButton(tr('burst_screenshot_stop', 'Stop'))
         self.stop_btn.clicked.connect(self._stop_burst)
+        self.stop_btn.setToolTip(tr('burst_stop_tooltip', '停止连拍'))
         btn_row.addWidget(self.stop_btn)
 
         btn_row.addStretch()
 
         self.close_btn = QPushButton(tr('playback_queue_close', 'Close'))
         self.close_btn.clicked.connect(self.close)
+        self.close_btn.setToolTip(tr('close_tooltip', '关闭'))
         btn_row.addWidget(self.close_btn)
         layout.addLayout(btn_row)
 

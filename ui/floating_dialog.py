@@ -4,7 +4,7 @@ from PySide6 import QtWidgets
 from PySide6.QtGui import QPainter, QColor, QPainterPath, QCursor, QIcon, QBitmap
 from PySide6.QtCore import Qt, QRectF, QSize
 import PySide6.QtCore as QtCore
-from utils.platform_utils import is_windows, is_macos, is_android, is_linux, is_wayland
+from utils.platform_utils import is_windows, is_macos, is_android, is_linux, is_wayland, wayland_move
 
 
 def _hide_from_taskbar(window):
@@ -376,7 +376,11 @@ class FloatingDialog(QDialog):
         close_btn.setIconSize(icon_size)
         close_btn.setFixedSize(min_width, height - 4)
         close_btn.setObjectName("closeButton")
-        close_btn.setToolTip('关闭')
+        try:
+            from core.language_manager import LanguageManager
+            close_btn.setToolTip(LanguageManager().tr('close', '关闭'))
+        except Exception:
+            close_btn.setToolTip('关闭')
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent; border: none; border-radius: 6px;
@@ -406,7 +410,8 @@ class FloatingDialog(QDialog):
             flags |= Qt.WindowType.WindowStaysOnTopHint
         if tool_window:
             flags |= Qt.WindowType.Tool
-        flags |= Qt.WindowType.FramelessWindowHint
+        if frameless:
+            flags |= Qt.WindowType.FramelessWindowHint
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMouseTracking(True)
@@ -414,9 +419,26 @@ class FloatingDialog(QDialog):
         self._dwm_blur_enabled = False
         self._cached_frosted_colors = None
         self._cached_frosted_theme = None
+        self._centered = False
 
     def showEvent(self, event):
         super().showEvent(event)
+        if not self._centered:
+            self._centered = True
+            try:
+                from PySide6.QtWidgets import QApplication
+                app = QApplication.instance()
+                if app:
+                    screen = app.primaryScreen()
+                    if screen:
+                        sg = screen.availableGeometry()
+                        self.adjustSize()
+                        ds = self.size()
+                        x = (sg.width() - ds.width()) // 2 + sg.x()
+                        y = (sg.height() - ds.height()) // 2 + sg.y()
+                        wayland_move(self, x, y)
+            except Exception:
+                pass
         # 修复首次显示时文字重叠的问题（无边框透明窗口常见问题）
         # 延迟强制重新计算所有子布局并重绘
         QtCore.QTimer.singleShot(0, self._fix_first_paint)
@@ -556,8 +578,7 @@ class FloatingDialog(QDialog):
             self.dragging = False
 
     def paintEvent(self, event):
-        from PySide6.QtGui import QPainterPath
-        from PySide6.QtCore import QRectF
+
         from ui.styles import AppStyles, rgba_to_blended_hex
 
         painter = QPainter(self)

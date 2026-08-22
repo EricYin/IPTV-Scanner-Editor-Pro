@@ -1,8 +1,14 @@
 """网络流媒体增强对话框 - Referer + HTTP 代理 + HTTP Headers"""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QLineEdit, QPlainTextEdit, QGroupBox, QWidget, QSizePolicy,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QLabel,
+    QPushButton,
+    QLineEdit,
+    QPlainTextEdit,
+    QGroupBox,
 )
 
 from ui.floating_dialog import FloatingDialog
@@ -44,6 +50,9 @@ class NetworkEnhanceDialog(FloatingDialog):
         except Exception:
             pass
         self._reload_from_config()
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -117,20 +126,24 @@ class NetworkEnhanceDialog(FloatingDialog):
         btn_row = QHBoxLayout()
         self.clear_btn = QPushButton(tr('network_enhance_clear', 'Clear All'))
         self.clear_btn.clicked.connect(self._clear_all)
+        self.clear_btn.setToolTip(tr('clear_enhance_tooltip', '清除网络增强设置'))
         btn_row.addWidget(self.clear_btn)
 
         btn_row.addStretch()
 
         self.apply_btn = QPushButton(tr('network_enhance_apply', 'Apply'))
         self.apply_btn.clicked.connect(self._apply_now)
+        self.apply_btn.setToolTip(tr('apply_enhance_tooltip', '应用设置'))
         btn_row.addWidget(self.apply_btn)
 
         self.save_btn = QPushButton(tr('audio_eq_save', 'Save'))
         self.save_btn.clicked.connect(self._save)
+        self.save_btn.setToolTip(tr('save_enhance_tooltip', '保存为默认'))
         btn_row.addWidget(self.save_btn)
 
         self.close_btn = QPushButton(tr('playback_queue_close', 'Close'))
         self.close_btn.clicked.connect(self.close)
+        self.close_btn.setToolTip(tr('close_tooltip', '关闭'))
         btn_row.addWidget(self.close_btn)
         layout.addLayout(btn_row)
 
@@ -165,11 +178,8 @@ class NetworkEnhanceDialog(FloatingDialog):
                 pc.set_http_referer(settings['http_referer'])
             if hasattr(pc, 'set_http_proxy'):
                 pc.set_http_proxy(settings['http_proxy'])
-            # HTTP Headers 通过 playback_settings 应用
-            if hasattr(pc, '_playback_settings'):
-                pc._playback_settings['http_headers'] = settings['http_headers']
-                pc._playback_settings['http_referer'] = settings['http_referer']
-                pc._playback_settings['http_proxy'] = settings['http_proxy']
+            if hasattr(pc, 'set_http_headers'):
+                pc.set_http_headers(settings['http_headers'])
         except Exception as e:
             logger.debug(f"应用网络增强设置到 mpv 失败: {e}")
 

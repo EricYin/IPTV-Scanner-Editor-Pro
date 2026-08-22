@@ -14,7 +14,7 @@
 from typing import Optional
 
 from PySide6.QtCore import Qt, QRectF, QSize
-from PySide6.QtGui import QPainter, QColor, QLinearGradient, QPen, QPalette
+from PySide6.QtGui import QPainter, QColor, QLinearGradient, QPalette
 from PySide6.QtWidgets import QWidget, QStyledItemDelegate, QStyle
 
 # 自定义数据角色：用于 delegate 从 QModelIndex 取评分
@@ -76,9 +76,14 @@ class QualityBarWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setStyleSheet("background: transparent;")
         self.setMinimumHeight(BAR_HEIGHT)
-        self.setSizePolicy(self.sizePolicy().Policy.Fixed, self.sizePolicy().Policy.Fixed)
+        from PySide6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         # 设置 objectName 以便通过 findChild 查找并动态更新评分
         self.setObjectName("quality_bar")
+
+    def reapply_styles(self):
+        """主题切换时刷新绘制"""
+        self.update()
 
     def set_score(self, score, grade: str = ''):
         """设置评分。score 为 None 表示未检测，不显示评分条。"""

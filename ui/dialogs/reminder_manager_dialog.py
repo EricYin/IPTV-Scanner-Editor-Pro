@@ -25,6 +25,17 @@ class ReminderManagerDialog(FloatingDialog):
         except Exception:
             pass
 
+    def closeEvent(self, event):
+        try:
+            from ui.theme_manager import get_theme_manager
+            get_theme_manager().unregister_window(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
+    def reapply_styles(self):
+        self._apply_theme()
+
     def _apply_theme(self):
         c = AppStyles._get_colors()
         r = AppStyles._get_style_border_radius()
@@ -86,10 +97,12 @@ class ReminderManagerDialog(FloatingDialog):
         btn_row = QHBoxLayout()
         self.remove_btn = QPushButton(tr('remove_selected', '删除选中'))
         self.remove_btn.clicked.connect(self._on_remove_selected)
+        self.remove_btn.setToolTip(tr('remove_tooltip', '删除选中提醒'))
         btn_row.addWidget(self.remove_btn)
 
         self.clear_btn = QPushButton(tr('clear_all', '清空全部'))
         self.clear_btn.clicked.connect(self._on_clear_all)
+        self.clear_btn.setToolTip(tr('clear_all_tooltip', '清空全部提醒'))
         btn_row.addWidget(self.clear_btn)
 
         btn_row.addStretch(1)
@@ -142,13 +155,23 @@ class ReminderManagerDialog(FloatingDialog):
 
                 item = QListWidgetItem()
                 item.setSizeHint(QSize(0, 40))
-                item.setData(Qt.ItemDataRole.UserRole, idx)
+                item.setData(Qt.ItemDataRole.UserRole, reminder.get('id', ''))
                 self.reminder_list.addItem(item)
                 self.reminder_list.setItemWidget(item, item_widget)
             except Exception:
                 pass
 
         tr = self.window.language_manager.tr
+        if not reminders:
+            empty_item = QListWidgetItem(tr('reminder_empty', '暂无提醒，在节目详情中可添加提醒'))
+            empty_item.setFlags(Qt.ItemFlag.NoItemFlags)
+            c_empty = AppStyles._get_colors()
+            empty_item.setForeground(
+                Qt.GlobalColor.gray if c_empty.get('window_text', '#ffffff') == '#ffffff'
+                else Qt.GlobalColor.darkGray
+            )
+            self.reminder_list.addItem(empty_item)
+
         self.info_label.setText(
             tr('reminder_count_info', '共 {count} 个提醒 | 提醒基于具体频道+节目+开始时间，节目开始前60秒触发通知')
             .format(count=len(reminders))
@@ -158,13 +181,11 @@ class ReminderManagerDialog(FloatingDialog):
         item = self.reminder_list.currentItem()
         if not item:
             return
-        idx = item.data(Qt.ItemDataRole.UserRole)
+        reminder_id = item.data(Qt.ItemDataRole.UserRole)
         ctrl = getattr(self.window, 'epg_reminder_ctrl', None)
         if not ctrl or not ctrl.service:
             return
-        reminders = ctrl.get_reminders()
-        if isinstance(idx, int) and 0 <= idx < len(reminders):
-            reminder_id = reminders[idx].get('id', '')
+        if reminder_id:
             ctrl.remove_reminder(reminder_id)
             self.reminder_removed.emit(reminder_id)
             self._load_reminders()

@@ -4,9 +4,14 @@ from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QListWidget, QListWidgetItem,
-    QAbstractItemView, QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QGroupBox,
+    QListWidget,
+    QListWidgetItem,
+    QAbstractItemView,
 )
 from PySide6.QtGui import QColor
 
@@ -40,6 +45,9 @@ class ResumeListDialog(FloatingDialog):
     @property
     def _resume_ctrl(self) -> Optional[object]:
         return getattr(self.window, 'resume_ctrl', None)
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -95,20 +103,24 @@ class ResumeListDialog(FloatingDialog):
         btn_row = QHBoxLayout()
         resume_btn = QPushButton(tr('resume_list_resume', 'Resume Selected'))
         resume_btn.clicked.connect(self._resume_selected)
+        resume_btn.setToolTip(tr('resume_tooltip', '继续播放选中记录'))
         btn_row.addWidget(resume_btn)
 
         delete_btn = QPushButton(tr('resume_list_delete', 'Delete Selected'))
         delete_btn.clicked.connect(self._delete_selected)
+        delete_btn.setToolTip(tr('delete_tooltip', '删除选中记录'))
         btn_row.addWidget(delete_btn)
 
         clear_all_btn = QPushButton(tr('resume_list_clear_all', 'Clear All'))
         clear_all_btn.clicked.connect(self._clear_all)
+        clear_all_btn.setToolTip(tr('clear_all_tooltip', '清空全部记录'))
         btn_row.addWidget(clear_all_btn)
 
         btn_row.addStretch()
 
         refresh_btn = QPushButton(tr('ctx_refresh', 'Refresh'))
         refresh_btn.clicked.connect(self._reload_list)
+        refresh_btn.setToolTip(tr('refresh_tooltip', '刷新列表'))
         btn_row.addWidget(refresh_btn)
 
         close_btn = QPushButton(tr('playback_queue_close', 'Close'))
@@ -143,11 +155,14 @@ class ResumeListDialog(FloatingDialog):
 
         current_label = tr('playback_queue_current', 'Current')
         for entry in entries:
-            url = entry.get('url', '')
-            name = entry.get('name', '') or self._basename(url)
-            position = float(entry.get('position', 0) or 0)
-            duration = float(entry.get('duration', 0) or 0)
-            updated = int(entry.get('updated_at', 0) or 0)
+            try:
+                url = entry.get('url', '')
+                name = entry.get('name', '') or self._basename(url)
+                position = float(entry.get('position', 0) or 0)
+                duration = float(entry.get('duration', 0) or 0)
+                updated = int(entry.get('updated_at', 0) or 0)
+            except (ValueError, TypeError):
+                continue
             is_current = (url and url == current_url)
 
             pos_str = self._format_time(position)
@@ -192,21 +207,21 @@ class ResumeListDialog(FloatingDialog):
         except Exception:
             return "--:--"
 
-    @staticmethod
-    def _format_relative_time(ts: int) -> str:
+    def _format_relative_time(self, ts: int) -> str:
         if not ts:
             return ''
         try:
             now = int(time.time())
             diff = now - ts
+            tr = self.window.language_manager.tr
             if diff < 60:
-                return 'just now'
+                return tr('just_now', 'just now')
             if diff < 3600:
-                return f"{diff // 60}m ago"
+                return tr('minutes_ago', '{}m ago').format(diff // 60)
             if diff < 86400:
-                return f"{diff // 3600}h ago"
+                return tr('hours_ago', '{}h ago').format(diff // 3600)
             if diff < 86400 * 30:
-                return f"{diff // 86400}d ago"
+                return tr('days_ago', '{}d ago').format(diff // 86400)
             return time.strftime('%Y-%m-%d', time.localtime(ts))
         except Exception:
             return ''

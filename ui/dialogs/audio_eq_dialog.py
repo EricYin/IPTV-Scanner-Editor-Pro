@@ -146,6 +146,9 @@ class AudioEqualizerDialog(FloatingDialog):
             except Exception:
                 pass
 
+    def reapply_styles(self):
+        self._apply_theme()
+
     def _apply_theme(self):
         c = AppStyles._get_colors()
         r = AppStyles._get_style_border_radius()
@@ -168,20 +171,20 @@ class AudioEqualizerDialog(FloatingDialog):
             }}
             QSlider::handle:horizontal {{
                 width: 14px; height: 14px; margin: -5px 0;
-                background: {accent} border-radius: 7px;
+                background: {accent}; border-radius: 7px;
             }}
             QSlider::handle:horizontal:hover {{
-                background: {accent} border: 2px solid #fff;
+                background: {accent}; border: 2px solid #fff;
             }}
             QSlider::groove:vertical {{
                 width: 4px; background: {mid}; border-radius: 2px;
             }}
             QSlider::handle:vertical {{
                 height: 14px; width: 14px; margin: 0 -5px;
-                background: {accent} border-radius: 7px;
+                background: {accent}; border-radius: 7px;
             }}
             QSlider::handle:vertical:hover {{
-                background: {accent} border: 2px solid #fff;
+                background: {accent}; border: 2px solid #fff;
             }}
         """)
 

@@ -1,11 +1,18 @@
 from typing import Dict, Any, List
 from datetime import datetime, date
-from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QScrollArea,
-                                QPushButton, QDateEdit, QLabel, QWidget,
-                                QCalendarWidget, QSizePolicy, QScrollBar,
-                                QToolButton)
-from PySide6.QtCore import Qt, QDate, Signal, QThread, QTimer, QEvent
-from PySide6.QtGui import QTextCharFormat, QColor, QFont, QIcon, QPainter, QPen
+from PySide6.QtWidgets import (
+    QPushButton,
+    QDateEdit,
+    QLabel,
+    QWidget,
+    QCalendarWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QScrollArea,
+    QToolButton,
+)
+from PySide6.QtCore import Qt, QDate, Signal, QThread, QTimer
+from PySide6.QtGui import QTextCharFormat, QColor, QFont, QIcon
 from ui.styles import AppStyles
 from ui.floating_dialog import FloatingDialog
 from ui.epg_timeline_widget import EpgTimelineWidget, EpgChannelHeaderWidget, EpgTimeHeaderWidget
@@ -133,9 +140,10 @@ class EpgTimelineDialog(FloatingDialog):
             icon_color = AppStyles._get_colors().get('window_text', '#ffffff')
             icon_path = AppStyles.get_icon('chevron_down', icon_color, 12)
             if icon_path:
+                safe_icon = icon_path.replace('\\', '/')
                 self.date_edit.setStyleSheet(self.date_edit.styleSheet() + f"""
                     QDateEdit::drop-down {{
-                        image: url({icon_path.replace('\\', '/')});
+                        image: url({safe_icon});
                     }}
                 """)
         except Exception:
@@ -314,12 +322,12 @@ class EpgTimelineDialog(FloatingDialog):
 
         self.main_scroll.verticalScrollBar().valueChanged.connect(self._sync_v_scroll)
         self.main_scroll.horizontalScrollBar().valueChanged.connect(self._sync_h_scroll)
-        self._v_scroll_timer = QTimer()
+        self._v_scroll_timer = QTimer(self)
         self._v_scroll_timer.setSingleShot(True)
         self._v_scroll_timer.setInterval(16)
         self._v_scroll_timer.timeout.connect(self._apply_v_scroll)
         self._pending_v_value = 0
-        self._h_scroll_timer = QTimer()
+        self._h_scroll_timer = QTimer(self)
         self._h_scroll_timer.setSingleShot(True)
         self._h_scroll_timer.setInterval(16)
         self._h_scroll_timer.timeout.connect(self._apply_h_scroll)
@@ -376,7 +384,8 @@ class EpgTimelineDialog(FloatingDialog):
             else:
                 lock = getattr(epg_parser, '_epg_lock', None)
                 if lock:
-                    lock.acquire()
+                    if not lock.acquire(timeout=2):
+                        return set()
                 try:
                     epg_data = dict(getattr(epg_parser, '_epg_data', {}))
                 finally:

@@ -23,9 +23,13 @@ class _EpgSearchWorker(QThread):
             epg_data = self._epg_parser.get_epg_data_copy() if hasattr(self._epg_parser, 'get_epg_data_copy') else getattr(self._epg_parser, '_epg_data', None)
             if epg_data and isinstance(epg_data, dict):
                 for epg_id, programs in epg_data.items():
+                    if self.isInterruptionRequested():
+                        return
                     if not isinstance(programs, list):
                         continue
                     for prog in programs:
+                        if self.isInterruptionRequested():
+                            return
                         title = (prog.get('title', '') or '').lower()
                         if self._keyword in title:
                             results.append({
@@ -57,6 +61,22 @@ class GlobalSearchDialog(FloatingDialog):
             get_theme_manager().register_window(self)
         except Exception:
             pass
+
+    def closeEvent(self, event):
+        if getattr(self, '_epg_worker', None):
+            self._epg_worker.requestInterruption()
+            self._epg_worker.quit()
+            self._epg_worker.wait(3000)
+            self._epg_worker = None
+        try:
+            from ui.theme_manager import get_theme_manager
+            get_theme_manager().unregister_window(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -121,7 +141,7 @@ class GlobalSearchDialog(FloatingDialog):
         self.count_label = QLabel(tr('search_type_to_search', '输入关键词开始搜索'))
         layout.addWidget(self.count_label)
 
-        self._search_timer = QTimer()
+        self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(200)
         self._search_timer.timeout.connect(self._on_search)
@@ -136,7 +156,7 @@ class GlobalSearchDialog(FloatingDialog):
             self._results.clear()
             if self._epg_worker and self._epg_worker.isRunning():
                 self._epg_worker.results_ready.disconnect(self._on_epg_results)
-                self._epg_worker.quit()
+                self._epg_worker.requestInterruption()
                 self._epg_worker.wait(1000)
             tr = self.window.language_manager.tr
             self.count_label.setText(tr('search_type_to_search', '输入关键词开始搜索'))
@@ -171,7 +191,7 @@ class GlobalSearchDialog(FloatingDialog):
         if epg_parser:
             if self._epg_worker and self._epg_worker.isRunning():
                 self._epg_worker.results_ready.disconnect(self._on_epg_results)
-                self._epg_worker.quit()
+                self._epg_worker.requestInterruption()
                 self._epg_worker.wait(1000)
             self._epg_worker = _EpgSearchWorker(epg_parser, text)
             self._epg_worker.results_ready.connect(self._on_epg_results)

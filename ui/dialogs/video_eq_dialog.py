@@ -40,6 +40,9 @@ class VideoEqualizerDialog(FloatingDialog):
         # 初始回填
         self._reload_from_config()
 
+    def reapply_styles(self):
+        self._apply_theme()
+
     def _apply_theme(self):
         c = AppStyles._get_colors()
         r = AppStyles._get_style_border_radius()
@@ -60,18 +63,18 @@ class VideoEqualizerDialog(FloatingDialog):
             }}
             QSlider::handle:horizontal {{
                 width: 14px; height: 14px; margin: -5px 0;
-                background: {c.get('accent', '#3a9')} border-radius: 7px;
+                background: {c.get('accent', '#3a9')}; border-radius: 7px;
             }}
             QSlider::handle:horizontal:hover {{
-                background: {c.get('accent', '#3a9')} border: 2px solid #fff;
+                background: {c.get('accent', '#3a9')}; border: 2px solid #fff;
             }}
         """)
 
     def _setup_ui(self):
         tr = self.window.language_manager.tr
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(6)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
 
         # ===== 上半部分：三列水平排列 =====
         top_row = QHBoxLayout()
@@ -346,7 +349,8 @@ class VideoEqualizerDialog(FloatingDialog):
             hw = get_hardware_detect_service()
             self.hw_label.setText(hw.get_hardware_summary())
         except Exception as e:
-            self.hw_label.setText(f'{e}')
+            logger.warning(f"硬件检测失败: {e}")
+            self.hw_label.setText(tr('hw_detect_failed', '硬件检测不可用'))
         bottom_row.addWidget(hw_box, 1)
         layout.addLayout(bottom_row)
 
@@ -491,8 +495,10 @@ class VideoEqualizerDialog(FloatingDialog):
             return
         pc = self.window.player_controller
         if pc and pc.is_playing:
-            getattr(pc, f'set_{key}')(value)
-            self._show_osd(f"{self.window.language_manager.tr(f'osd_video_{key}', key.capitalize())}: {value:+d}")
+            setter = getattr(pc, f'set_{key}', None)
+            if setter:
+                setter(value)
+                self._show_osd(f"{self.window.language_manager.tr(f'osd_video_{key}', key.capitalize())}: {value:+d}")
 
     def _on_sharpness_changed(self, value: int, label: QLabel):
         v = round(value / 100.0, 3)
@@ -765,20 +771,18 @@ class VideoEqualizerDialog(FloatingDialog):
         self._show_osd(tr('osd_autocrop_analyzing', '正在分析黑边...'))
 
         def _on_done(success, crop, message):
-            # 子线程回调，切回主线程
-            from PySide6.QtCore import QTimer
-
             def _ui_update():
                 self.autocrop_btn.setEnabled(True)
                 self._show_osd(message)
-            QTimer.singleShot(0, _ui_update)
+            from utils.thread_safety import invoke_on_thread
+            invoke_on_thread(self, _ui_update)
 
         try:
             svc.analyze_and_apply(_on_done)
         except Exception as e:
             self.autocrop_btn.setEnabled(True)
             logger.error(f"自动裁剪黑边失败: {e}")
-            self._show_osd(f"失败: {e}")
+            self._show_osd(tr('autocrop_failed', '自动裁剪失败'))
 
     def _on_remove_crop_clicked(self):
         """移除裁剪滤镜"""
@@ -843,7 +847,8 @@ class VideoEqualizerDialog(FloatingDialog):
             pc.reset_video_eq()
             pc.set_video_rotate(0)
             pc.set_video_flip('')
-            pc.clear_video_crop()
+            if hasattr(pc, 'clear_video_crop'):
+                pc.clear_video_crop()
             # 重置运动补偿和分辨率提升
             if hasattr(pc, 'clear_motion_compensation'):
                 pc.clear_motion_compensation()

@@ -356,12 +356,15 @@ class ScanChannelDialog(FloatingDialog):
         self.scan_scroll.setWidget(scan_widget)
         left_layout.addWidget(self.scan_scroll, 1)
 
-        # 关闭按钮放在左下角
+        # 关闭按钮放在左下角靠右
+        close_row = QtWidgets.QHBoxLayout()
+        close_row.addStretch()
         self.close_btn = QtWidgets.QPushButton(tr('close_button', 'Close'))
         self.close_btn.setStyleSheet(AppStyles.common_button_style())
         self.close_btn.setFixedHeight(32)
         self.close_btn.clicked.connect(self.close)
-        left_layout.addWidget(self.close_btn)
+        close_row.addWidget(self.close_btn)
+        left_layout.addLayout(close_row)
 
         main_layout.addWidget(self.left_panel)
 
@@ -1593,10 +1596,11 @@ class ScanChannelDialog(FloatingDialog):
         results = classifier.classify_all(channels, overwrite=False)
 
         category_order = classifier.get_category_order()
+        category_index = {cat: i for i, cat in enumerate(category_order)}
 
         def sort_key(r):
             cat = r['new_group']
-            cat_idx = category_order.index(cat) if cat in category_order else 99
+            cat_idx = category_index.get(cat, 99)
             return (cat_idx, r['sort_key'])
 
         sorted_results = sorted(results, key=sort_key)
@@ -1772,7 +1776,7 @@ class ScanChannelDialog(FloatingDialog):
         if not index.isValid():
             return
 
-        menu = QtWidgets.QMenu()
+        menu = QtWidgets.QMenu(self)
         menu.setStyleSheet(AppStyles.common_menu_style())
 
         from models.channel_model import ChannelListModel as CLM  # noqa: F401,E402
@@ -2517,6 +2521,10 @@ class ScanChannelDialog(FloatingDialog):
         """模型切换后重新连接selectionModel信号"""
         sel_model = self.channel_list.selectionModel()
         if sel_model:
+            try:
+                sel_model.selectionChanged.disconnect(self._on_channel_selected)
+            except (RuntimeError, TypeError):
+                pass
             sel_model.selectionChanged.connect(self._on_channel_selected)
 
     def _set_buttons_during_scan(self, is_scanning: bool):
@@ -2551,7 +2559,10 @@ class ScanChannelDialog(FloatingDialog):
         input_widget.setStyleSheet(original_style + f"; border: 2px solid {err_color};")
         self.stats_label.setText(message)
         self.stats_label.setStyleSheet(f"color: {err_color}; font-weight: bold;")
-        QtCore.QTimer.singleShot(2000, lambda: self._clear_input_warning(input_widget, original_style))
+        warning_timer = QtCore.QTimer(self)
+        warning_timer.setSingleShot(True)
+        warning_timer.timeout.connect(lambda: self._clear_input_warning(input_widget, original_style))
+        warning_timer.start(2000)
 
     def _clear_input_warning(self, input_widget, original_style):
         try:
@@ -3157,6 +3168,7 @@ class ScanChannelDialog(FloatingDialog):
             get_theme_manager().unregister_window(self)
         except Exception:
             pass
+        self._unregister_cleanup_handlers()
         event.accept()
 
     def reapply_styles(self):

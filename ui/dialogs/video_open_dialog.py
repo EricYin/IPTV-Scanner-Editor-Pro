@@ -1,14 +1,21 @@
 import os
-import sys
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
-    QPushButton, QLabel, QComboBox, QSizePolicy, QStyle, QLineEdit,
-    QInputDialog, QMenu,
+    QVBoxLayout,
+    QHBoxLayout,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QComboBox,
+    QSizePolicy,
+    QStyle,
+    QLineEdit,
+    QInputDialog,
+    QMenu,
 )
-from PySide6.QtCore import Qt, QDir, QSize
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt, QDir, QSize, QTimer
 from PySide6.QtGui import QAction
-from utils.platform_utils import is_windows, is_android
+from utils.platform_utils import is_windows
+from ..floating_dialog import FloatingDialog
 
 
 _VIDEO_EXTS = ('.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.ts', '.m2ts', '.webm')
@@ -16,9 +23,12 @@ _AUDIO_EXTS = ('.mp3', '.flac', '.wav', '.aac', '.ogg', '.opus', '.wma', '.m4a',
 _MEDIA_EXTS = _VIDEO_EXTS + _AUDIO_EXTS
 
 
-class VideoOpenDialog(QDialog):
+class VideoOpenDialog(FloatingDialog):
     def __init__(self, parent=None, language_manager=None):
-        super().__init__(parent)
+        try:
+            super().__init__(parent, stay_on_top=False)
+        except TypeError:
+            super().__init__(parent)
         self._selected_path = None
         self._lm = language_manager
         self._current_dir = QDir.homePath()
@@ -32,6 +42,12 @@ class VideoOpenDialog(QDialog):
         from ui.styles import AppStyles
         self.setStyleSheet(AppStyles.popup_dialog_style())
 
+        try:
+            from ..theme_manager import get_theme_manager
+            get_theme_manager().register_window(self)
+        except Exception:
+            pass
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
@@ -42,6 +58,7 @@ class VideoOpenDialog(QDialog):
         self._up_btn = QPushButton(self._tr("parent_folder", "上级目录"))
         self._up_btn.setFixedWidth(90)
         self._up_btn.clicked.connect(self._go_up)
+        self._up_btn.setToolTip(self._tr("parent_folder_tooltip", "返回上级目录"))
         nav.addWidget(self._up_btn)
 
         self._drive_btn = None
@@ -50,6 +67,7 @@ class VideoOpenDialog(QDialog):
             self._drive_btn = QPushButton(self._tr("drive", "盘符"))
             self._drive_btn.setFixedWidth(70)
             self._drive_btn.setMenu(self._build_drive_menu())
+            self._drive_btn.setToolTip(self._tr("drive_list_tooltip", "选择磁盘/驱动器"))
             nav.addWidget(self._drive_btn)
 
         self._path_edit = QLineEdit(self._current_dir)
@@ -59,6 +77,7 @@ class VideoOpenDialog(QDialog):
         go_btn = QPushButton(self._tr("go", "转到"))
         go_btn.setFixedWidth(50)
         go_btn.clicked.connect(self._on_path_entered)
+        go_btn.setToolTip(self._tr("go_to_tooltip", "转到指定路径"))
         nav.addWidget(go_btn)
 
         self._filter_combo = QComboBox()
@@ -68,6 +87,7 @@ class VideoOpenDialog(QDialog):
         self._filter_combo.addItem(self._tr("all_files", "所有文件"))
         self._filter_combo.setFixedWidth(120)
         self._filter_combo.currentIndexChanged.connect(self._on_filter_changed)
+        self._filter_combo.setToolTip(self._tr("filter_tooltip", "过滤文件类型"))
         nav.addWidget(self._filter_combo)
 
         layout.addLayout(nav)
@@ -86,16 +106,33 @@ class VideoOpenDialog(QDialog):
         self._select_btn.setFixedWidth(100)
         self._select_btn.setDefault(True)
         self._select_btn.clicked.connect(self._on_select)
+        self._select_btn.setToolTip(self._tr("select_tooltip", "选定当前文件"))
         btn_row.addWidget(self._select_btn)
 
         cancel_btn = QPushButton(self._tr("cancel", "取消"))
         cancel_btn.setFixedWidth(80)
         cancel_btn.clicked.connect(self.reject)
+        cancel_btn.setToolTip(self._tr("cancel_tooltip", "取消"))
         btn_row.addWidget(cancel_btn)
 
         layout.addLayout(btn_row)
 
         self._refresh_list()
+        QTimer.singleShot(0, self._list.setFocus)
+
+    def closeEvent(self, event):
+        try:
+            from ..theme_manager import get_theme_manager
+            get_theme_manager().unregister_window(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
+    def reapply_styles(self):
+        from ui.styles import AppStyles
+        self.setStyleSheet(AppStyles.popup_dialog_style())
+        if self._drive_btn is not None:
+            self._drive_btn.setMenu(self._build_drive_menu())
 
     def _tr(self, key, default=''):
         if self._lm:
@@ -286,6 +323,11 @@ class VideoOpenDialog(QDialog):
             item.setData(Qt.ItemDataRole.UserRole, ('file', os.path.join(self._current_dir, f)))
             self._list.addItem(item)
 
+        if not dirs and not files:
+            empty_item = QListWidgetItem(self._tr("empty_dir", "此目录为空"))
+            empty_item.setFlags(Qt.ItemDataFlag.NoItemFlags)
+            self._list.addItem(empty_item)
+
     def _show_drives_root(self):
         self._list.clear()
         self._path_edit.setText('')
@@ -325,7 +367,7 @@ class VideoOpenDialog(QDialog):
             self._refresh_list()
 
     def _on_filter_changed(self, index):
-        self._show_video_only = (index == 0)
+        self._show_video_only = (index == 0 or index == 1)
         self._show_audio_only = (index == 2)
         self._refresh_list()
 

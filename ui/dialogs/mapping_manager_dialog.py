@@ -1,5 +1,5 @@
 from PySide6 import QtWidgets
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal
 from core.log_manager import LogManager
 from models.channel_mappings import mapping_manager
 from utils.error_handler import show_error, show_warning, show_info, show_confirm
@@ -59,12 +59,26 @@ class MappingManagerDialog(FloatingDialog):
         from ..theme_manager import get_theme_manager
         get_theme_manager().register_window(self)
 
+    def closeEvent(self, event):
+        for worker_attr in ('_update_check_worker', '_refresh_worker'):
+            worker = getattr(self, worker_attr, None)
+            if worker and worker.isRunning():
+                worker.quit()
+                worker.wait(3000)
+        try:
+            from ..theme_manager import get_theme_manager
+            get_theme_manager().unregister_window(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
     def _tr(self, key: str, fallback: str) -> str:
         v = self.language_manager.tr(key, fallback)
         return v if v else fallback
 
     def setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
         _ = self._tr
 
@@ -115,6 +129,7 @@ class MappingManagerDialog(FloatingDialog):
         self.refresh_cache_btn = QtWidgets.QPushButton(_('refresh_remote_mapping', 'Refresh Remote Mapping'))
         self.refresh_cache_btn.setStyleSheet(AppStyles.common_button_style())
         self.refresh_cache_btn.clicked.connect(self.refresh_cache)
+        self.refresh_cache_btn.setToolTip(_('refresh_cache_tooltip', '刷新映射缓存'))
         refresh_layout.addWidget(self.refresh_cache_btn)
         refresh_layout.addStretch()
         layout.addLayout(refresh_layout)
@@ -182,12 +197,15 @@ class MappingManagerDialog(FloatingDialog):
         self.add_mapping_btn = QtWidgets.QPushButton(_('add_mapping', 'Add'))
         self.add_mapping_btn.setStyleSheet(AppStyles.common_button_style())
         self.add_mapping_btn.clicked.connect(self.add_mapping)
+        self.add_mapping_btn.setToolTip(_('add_mapping_tooltip', '添加自定义映射'))
         self.edit_mapping_btn = QtWidgets.QPushButton(_('edit_mapping', 'Edit'))
         self.edit_mapping_btn.setStyleSheet(AppStyles.common_button_style())
         self.edit_mapping_btn.clicked.connect(self.edit_mapping)
+        self.edit_mapping_btn.setToolTip(_('edit_mapping_tooltip', '编辑选中映射'))
         self.delete_mapping_btn = QtWidgets.QPushButton(_('delete_mapping', 'Delete'))
         self.delete_mapping_btn.setStyleSheet(AppStyles.common_button_style())
         self.delete_mapping_btn.clicked.connect(self.delete_mapping)
+        self.delete_mapping_btn.setToolTip(_('delete_mapping_tooltip', '删除选中映射'))
         btn_row.addWidget(self.add_mapping_btn)
         btn_row.addWidget(self.edit_mapping_btn)
         btn_row.addWidget(self.delete_mapping_btn)
@@ -200,15 +218,18 @@ class MappingManagerDialog(FloatingDialog):
         self.export_mappings_btn = QtWidgets.QPushButton(_('export_user_mappings', 'Export'))
         self.export_mappings_btn.setStyleSheet(AppStyles.common_button_style())
         self.export_mappings_btn.clicked.connect(self.export_mappings)
+        self.export_mappings_btn.setToolTip(_('export_mappings_tooltip', '导出映射到文件'))
         self.import_mappings_btn = QtWidgets.QPushButton(_('import_user_mappings', 'Import'))
         self.import_mappings_btn.setStyleSheet(AppStyles.common_button_style())
         self.import_mappings_btn.clicked.connect(self.import_mappings)
+        self.import_mappings_btn.setToolTip(_('import_mappings_tooltip', '从文件导入映射'))
         bottom_row.addWidget(self.export_mappings_btn)
         bottom_row.addWidget(self.import_mappings_btn)
         bottom_row.addStretch()
         self.close_btn = QtWidgets.QPushButton(_('close', 'Close'))
         self.close_btn.setStyleSheet(AppStyles.common_button_style())
         self.close_btn.clicked.connect(self.accept)
+        self.close_btn.setToolTip(_('close_tooltip', '关闭'))
         bottom_row.addWidget(self.close_btn)
         layout.addLayout(bottom_row)
 
@@ -277,6 +298,17 @@ class MappingManagerDialog(FloatingDialog):
                 self.mapping_table.setItem(row, 3, QtWidgets.QTableWidgetItem(logo_url))
                 row += 1
         self.mapping_table.resizeColumnsToContents()
+        if row == 0:
+            from ui.styles import AppStyles
+            from PySide6.QtGui import QColor
+            tr = self.language_manager.tr if self.language_manager else (lambda k, d='': d)
+            self.mapping_table.setRowCount(1)
+            self.mapping_table.setSpan(0, 0, 1, 4)
+            empty_item = QtWidgets.QTableWidgetItem(tr('mapping_empty', '暂无自定义映射，请在下方添加'))
+            empty_item.setFlags(Qt.ItemFlag.NoItemFlags)
+            colors = AppStyles._get_colors()
+            empty_item.setForeground(QColor(colors.get('player_panel_secondary', '#888888')))
+            self.mapping_table.setItem(0, 0, empty_item)
 
     def filter_mappings(self):
         if not hasattr(self, 'mapping_table'):

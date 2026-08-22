@@ -4,10 +4,16 @@ from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QListWidget, QListWidgetItem,
-    QTabWidget, QWidget, QAbstractItemView,
-    QLineEdit, QInputDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QListWidget,
+    QListWidgetItem,
+    QTabWidget,
+    QWidget,
+    QAbstractItemView,
+    QInputDialog,
 )
 from PySide6.QtGui import QColor
 
@@ -40,6 +46,9 @@ class BookmarkDialog(FloatingDialog):
     @property
     def _bookmark_ctrl(self) -> Optional[object]:
         return getattr(self.window, 'bookmark_ctrl', None)
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -125,13 +134,16 @@ class BookmarkDialog(FloatingDialog):
         chap_btn_row = QHBoxLayout()
         chap_prev = QPushButton(tr('bookmark_chapter_prev', 'Previous Chapter'))
         chap_prev.clicked.connect(self._on_prev_chapter)
+        chap_prev.setToolTip(tr('chap_prev_tooltip', '上一个章节'))
         chap_btn_row.addWidget(chap_prev)
         chap_next = QPushButton(tr('bookmark_chapter_next', 'Next Chapter'))
         chap_next.clicked.connect(self._on_next_chapter)
+        chap_next.setToolTip(tr('chap_next_tooltip', '下一个章节'))
         chap_btn_row.addWidget(chap_next)
         chap_btn_row.addStretch()
         chap_refresh = QPushButton(tr('ctx_refresh', 'Refresh'))
         chap_refresh.clicked.connect(self._reload_chapters)
+        chap_refresh.setToolTip(tr('chap_refresh_tooltip', '刷新章节列表'))
         chap_btn_row.addWidget(chap_refresh)
         clayout.addLayout(chap_btn_row)
 
@@ -160,19 +172,24 @@ class BookmarkDialog(FloatingDialog):
         bm_btn_row = QHBoxLayout()
         add_btn = QPushButton(tr('bookmark_add', 'Add Bookmark'))
         add_btn.clicked.connect(self._on_add_bookmark)
+        add_btn.setToolTip(tr('bookmark_add_tooltip', '添加书签'))
         bm_btn_row.addWidget(add_btn)
         delete_btn = QPushButton(tr('bookmark_delete', 'Delete Selected'))
         delete_btn.clicked.connect(self._on_delete_bookmark)
+        delete_btn.setToolTip(tr('bookmark_delete_tooltip', '删除书签'))
         bm_btn_row.addWidget(delete_btn)
         clear_url_btn = QPushButton(tr('bookmark_clear_url', 'Clear Current File'))
         clear_url_btn.clicked.connect(self._on_clear_current_url)
+        clear_url_btn.setToolTip(tr('clear_url_tooltip', '清除书签URL'))
         bm_btn_row.addWidget(clear_url_btn)
         clear_all_btn = QPushButton(tr('bookmark_clear_all', 'Clear All'))
         clear_all_btn.clicked.connect(self._on_clear_all)
+        clear_all_btn.setToolTip(tr('clear_all_bookmarks_tooltip', '清空全部书签'))
         bm_btn_row.addWidget(clear_all_btn)
         bm_btn_row.addStretch()
         refresh_btn = QPushButton(tr('ctx_refresh', 'Refresh'))
         refresh_btn.clicked.connect(self._reload_bookmarks)
+        refresh_btn.setToolTip(tr('refresh_bookmarks_tooltip', '刷新书签列表'))
         bm_btn_row.addWidget(refresh_btn)
         blayout.addLayout(bm_btn_row)
 
@@ -183,8 +200,12 @@ class BookmarkDialog(FloatingDialog):
         close_row.addStretch()
         close_btn = QPushButton(tr('playback_queue_close', 'Close'))
         close_btn.clicked.connect(self.close)
+        close_btn.setToolTip(tr('close_tooltip', '关闭'))
+        close_btn.setAutoDefault(True)
         close_row.addWidget(close_btn)
         layout.addLayout(close_row)
+
+        QTimer.singleShot(60, self._bookmark_list.setFocus)
 
     def _build_view_combo(self):
         from PySide6.QtWidgets import QComboBox
@@ -234,6 +255,7 @@ class BookmarkDialog(FloatingDialog):
                 text += f"  [{current_label}]"
             item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, i)
+            self._chapter_list.addItem(item)
             if is_current:
                 try:
                     c = AppStyles._get_colors()
@@ -241,7 +263,6 @@ class BookmarkDialog(FloatingDialog):
                 except Exception:
                     pass
                 self._chapter_list.setCurrentItem(item)
-            self._chapter_list.addItem(item)
 
     def _reload_bookmarks(self):
         tr = self.window.language_manager.tr
@@ -304,6 +325,7 @@ class BookmarkDialog(FloatingDialog):
                 pass  # name 已包含文件名
             item = QListWidgetItem(f"{text}\n{sub}")
             item.setData(Qt.ItemDataRole.UserRole, {'url': url, 'position': position})
+            self._bookmark_list.addItem(item)
             if is_current:
                 try:
                     c = AppStyles._get_colors()
@@ -311,7 +333,6 @@ class BookmarkDialog(FloatingDialog):
                 except Exception:
                     pass
                 self._bookmark_list.setCurrentItem(item)
-            self._bookmark_list.addItem(item)
 
     @staticmethod
     def _basename(url: str) -> str:
@@ -334,21 +355,22 @@ class BookmarkDialog(FloatingDialog):
         except Exception:
             return "--:--"
 
-    @staticmethod
-    def _format_relative_time(ts: int) -> str:
+    def _format_relative_time(self, ts: int) -> str:
         if not ts:
             return ''
         try:
+            from core.language_manager import LanguageManager
+            tr = LanguageManager().tr
             now = int(time.time())
             diff = now - ts
             if diff < 60:
-                return 'just now'
+                return tr('just_now', '刚刚')
             if diff < 3600:
-                return f"{diff // 60}m ago"
+                return tr('minutes_ago', '{}分钟前').format(diff // 60)
             if diff < 86400:
-                return f"{diff // 3600}h ago"
+                return tr('hours_ago', '{}小时前').format(diff // 3600)
             if diff < 86400 * 30:
-                return f"{diff // 86400}d ago"
+                return tr('days_ago', '{}天前').format(diff // 86400)
             return time.strftime('%Y-%m-%d', time.localtime(ts))
         except Exception:
             return ''

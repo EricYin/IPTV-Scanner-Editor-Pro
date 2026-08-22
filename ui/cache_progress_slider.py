@@ -16,7 +16,7 @@ class CacheProgressSlider(QSlider):
         from ui.theme_manager import get_theme_manager
         get_theme_manager().theme_changed.connect(self._on_theme_changed)
 
-        self._preview_label = QLabel()
+        self._preview_label = QLabel(self)
         self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._preview_label.setVisible(False)
         self._preview_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)

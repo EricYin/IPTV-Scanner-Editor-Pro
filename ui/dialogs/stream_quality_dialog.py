@@ -48,6 +48,9 @@ class StreamQualityDialog(FloatingDialog):
         QTimer.singleShot(50, self._refresh)
 
     # ---------- UI ----------
+    def reapply_styles(self):
+        self._apply_theme()
+
     def _apply_theme(self):
         c = AppStyles._get_colors()
         r = AppStyles._get_style_border_radius()
@@ -155,6 +158,7 @@ class StreamQualityDialog(FloatingDialog):
         btn_row.addStretch()
         close_btn = QPushButton(tr('playback_queue_close', '关闭'))
         close_btn.clicked.connect(self.close)
+        close_btn.setToolTip(tr('close_tooltip', '关闭'))
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
 

@@ -29,6 +29,10 @@ class WallpaperWidget(QWidget):
         self._timer.setInterval(16)  # ~60fps
         self._timer.timeout.connect(self._on_tick)
 
+    def reapply_styles(self):
+        """主题切换时刷新绘制"""
+        self.update()
+
     # ---- QLabel 兼容 API ----
     def setPixmap(self, pixmap: QPixmap):
         """存储图标 pixmap，居中绘制在银河壁纸上方（带柔和光晕）。"""

@@ -1,10 +1,19 @@
 """字幕样式对话框 - 完整的字幕样式、延迟、缩放、位置、可见性调整"""
-from typing import Optional, Dict, Any
 
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QSpinBox, QDoubleSpinBox, QSlider, QCheckBox, QComboBox,
-    QFontComboBox, QColorDialog, QGroupBox, QGridLayout, QWidget, QSizePolicy,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+    QDoubleSpinBox,
+    QSlider,
+    QCheckBox,
+    QComboBox,
+    QFontComboBox,
+    QColorDialog,
+    QGroupBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
@@ -99,6 +108,9 @@ class SubtitleStyleDialog(FloatingDialog):
         except Exception:
             pass
 
+    def reapply_styles(self):
+        self._apply_theme()
+
     def _apply_theme(self):
         c = AppStyles._get_colors()
         r = AppStyles._get_style_border_radius()
@@ -120,7 +132,7 @@ class SubtitleStyleDialog(FloatingDialog):
             }}
             QSlider::handle:horizontal {{
                 width: 14px; height: 14px; margin: -5px 0;
-                background: {c.get('accent', '#3a9')} border-radius: 7px;
+                background: {c.get('accent', '#3a9')}; border-radius: 7px;
             }}
         """)
 
@@ -583,7 +595,7 @@ class SubtitleDownloadDialog(FloatingDialog):
 
     def _setup_ui(self):
         from PySide6.QtWidgets import (
-            QLineEdit, QListWidget, QListWidgetItem, QComboBox, QProgressBar,
+            QLineEdit, QListWidget, QListWidgetItem, QProgressBar,
         )
         tr = self.window.language_manager.tr
         layout = QVBoxLayout(self)
@@ -638,7 +650,7 @@ class SubtitleDownloadDialog(FloatingDialog):
 
     # ---------- 搜索 ----------
     def _do_search(self):
-        from PySide6.QtCore import QThread, Signal
+        from PySide6.QtCore import QThread
         query = self.query_edit.text().strip()
         lang = self.lang_combo.currentData() or 'eng'
         self.result_list.clear()
@@ -734,7 +746,7 @@ class SubtitleDownloadDialog(FloatingDialog):
         # 获取当前语言选择（SubtitleCat 下载需要）
         language = self.lang_combo.currentData() or 'all'
 
-        from PySide6.QtCore import QThread, Signal
+        from PySide6.QtCore import QThread
 
         class _DLWorker(QThread):
             done = Signal(str)
@@ -783,6 +795,15 @@ class SubtitleDownloadDialog(FloatingDialog):
         self.subtitle_loaded.emit(path)
 
     def closeEvent(self, event):
+        for worker_attr in ('_worker', '_dl_worker'):
+            worker = getattr(self, worker_attr, None)
+            if worker and worker.isRunning():
+                try:
+                    worker.requestInterruption()
+                    worker.quit()
+                    worker.wait(2000)
+                except Exception:
+                    pass
         try:
             from ui.theme_manager import get_theme_manager
             get_theme_manager().unregister_window(self)

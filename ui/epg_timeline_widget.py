@@ -1,18 +1,28 @@
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
-from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QToolTip
-from PySide6.QtCore import Qt, QRectF, QPoint, Signal
-from PySide6.QtGui import QPainter, QColor, QPen, QFont, QBrush, QLinearGradient, QFontMetrics, QPainterPath
+from typing import Dict, Any, List
+from PySide6.QtWidgets import QWidget, QToolTip, QApplication
+from PySide6.QtCore import Qt, QRectF, Signal
+from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPainterPath
 from ui.styles import AppStyles, color_to_hex
-from core.log_manager import global_logger as logger
+
+
+def _scaled_font(point_delta: int = 0) -> QFont:
+    """基于应用字体创建 DPI 感知字体，point_delta 为相对偏移"""
+    base = QApplication.font() if QApplication.instance() else QFont()
+    font = QFont(base)
+    ps = base.pointSize() if base.pointSize() > 0 else 9
+    font.setPointSize(max(1, ps + point_delta))
+    return font
 
 
 def _safe_color(color_val, fallback='#1e1e1e'):
     if not color_val:
         return QColor(fallback)
     if isinstance(color_val, str) and color_val.startswith('rgba('):
-        hex_val = color_to_hex(color_val)
-        return QColor(hex_val)
+        parts = color_val.strip('rgba()').split(',')
+        r, g, b = int(parts[0]), int(parts[1]), int(parts[2])
+        a = int(float(parts[3]) * 255) if len(parts) > 3 else 255
+        return QColor(r, g, b, a)
     return QColor(color_val)
 
 
@@ -93,8 +103,9 @@ class EpgTimelineWidget(QWidget):
             self._cached_rects.append(row_rects)
         self._cache_valid = True
 
-    def _is_current_program(self, rect_info):
-        now = datetime.now()
+    def _is_current_program(self, rect_info, now=None):
+        if now is None:
+            now = datetime.now()
         return rect_info['start'] <= now <= rect_info['end']
 
     def get_current_time_x(self):
@@ -122,6 +133,16 @@ class EpgTimelineWidget(QWidget):
         clip = event.rect()
         painter.fillRect(clip, bg)
 
+        if not self._channels:
+            from core.language_manager import LanguageManager
+            painter.setPen(text)
+            painter.setFont(_scaled_font(0))
+            painter.drawText(clip, Qt.AlignmentFlag.AlignCenter,
+                             LanguageManager().tr('epg_empty', '暂无节目数据'))
+            painter.end()
+            return
+
+        now = datetime.now()
         w = self._hours * self.HOUR_WIDTH
 
         first_hour = max(0, clip.left() // self.HOUR_WIDTH)
@@ -135,8 +156,7 @@ class EpgTimelineWidget(QWidget):
         first_row = max(0, clip.top() // self.ROW_HEIGHT)
         last_row = min(len(self._channels), clip.bottom() // self.ROW_HEIGHT + 1)
 
-        small_font = QFont()
-        small_font.setPixelSize(10)
+        small_font = _scaled_font(-2)
         fm = QFontMetrics(small_font)
 
         for i in range(first_row, last_row):
@@ -149,7 +169,7 @@ class EpgTimelineWidget(QWidget):
                     rx1, rx2 = rect_info['x1'], rect_info['x2']
                     if rx2 < clip.left() or rx1 > clip.right():
                         continue
-                    is_current = self._is_current_program(rect_info)
+                    is_current = self._is_current_program(rect_info, now)
                     is_hover = (i == self._hover_channel and prog_idx == self._hover_program_idx)
                     if is_current:
                         fill = current_bg
@@ -204,8 +224,7 @@ class EpgTimelineWidget(QWidget):
             painter.setPen(pen_now)
             painter.drawLine(int(now_x), 0, int(now_x), len(self._channels) * self.ROW_HEIGHT)
             now_label = now.strftime('%H:%M')
-            label_font = QFont()
-            label_font.setPixelSize(9)
+            label_font = _scaled_font(-3)
             painter.setFont(label_font)
             painter.drawText(int(now_x) + 4, 0, 50, self.HEADER_HEIGHT,
                            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -313,8 +332,7 @@ class EpgChannelHeaderWidget(QWidget):
         painter.fillRect(clip, header_bg)
 
         pen = QPen(border, 1)
-        font = QFont()
-        font.setPixelSize(11)
+        font = _scaled_font(-1)
         painter.setFont(font)
 
         first_row = max(0, clip.top() // self.ROW_HEIGHT)
@@ -365,8 +383,7 @@ class EpgTimeHeaderWidget(QWidget):
         painter.setPen(pen)
         painter.drawLine(0, self.HEADER_HEIGHT, w, self.HEADER_HEIGHT)
 
-        font = QFont()
-        font.setPixelSize(11)
+        font = _scaled_font(-1)
         painter.setFont(font)
         painter.setPen(text)
 

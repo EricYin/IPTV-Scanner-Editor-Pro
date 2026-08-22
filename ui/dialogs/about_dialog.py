@@ -25,9 +25,20 @@ class AboutDialog(FloatingDialog):
         from ..styles import AppStyles
         self._colors = AppStyles._get_colors()
         self._init_ui()
+        self._latest_version_result = None
+        self._closing = False
 
         from ..theme_manager import get_theme_manager
         get_theme_manager().register_window(self)
+
+    def closeEvent(self, event):
+        self._closing = True
+        try:
+            from ..theme_manager import get_theme_manager
+            get_theme_manager().unregister_window(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def _init_ui(self):
         """初始化 UI"""
@@ -188,40 +199,40 @@ class AboutDialog(FloatingDialog):
     def _check_version_thread(self):
         """在线程中检查版本（不阻塞 UI）"""
         tr = self.language_manager.tr
-        from core.log_manager import global_logger as logger
         logger.info("开始检查版本...")
         try:
-            # 在线程中运行异步代码
             import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                logger.debug("开始获取最新版本...")
                 latest_version, publish_date = loop.run_until_complete(
                     asyncio.wait_for(self._get_latest_version(), timeout=5)
                 )
-                logger.debug(f"获取到最新版本：{latest_version}")
-                # 保存结果到实例变量
+                if self._closing:
+                    return
                 self._latest_version_result = latest_version
-                # 在主线程中更新 UI
                 from utils.thread_safety import invoke_on_thread
                 invoke_on_thread(self, self._update_version_ui)
             finally:
                 loop.close()
         except asyncio.TimeoutError:
+            if self._closing:
+                return
             logger.error("版本检查超时")
             self._latest_version_result = tr("request_timeout_text", "(Request Timeout)")
             from utils.thread_safety import invoke_on_thread
             invoke_on_thread(self, self._update_version_ui)
         except Exception as e:
+            if self._closing:
+                return
             logger.error(f"版本检查失败：{e}")
             self._latest_version_result = tr("fetch_failed_text", "(Fetch Failed)")
             from utils.thread_safety import invoke_on_thread
             invoke_on_thread(self, self._update_version_ui)
 
+
     def _update_version_ui(self):
         """在主线程中更新版本显示"""
-        from core.log_manager import global_logger as logger
         logger.debug(f"更新 UI 版本号：{self._latest_version_result}")
         try:
             if hasattr(self, 'latest_version_value'):
@@ -309,7 +320,9 @@ class AboutDialog(FloatingDialog):
                 )
                 continue
             existing = child.styleSheet()
-            if 'accent' in existing or val_style.split(';')[1] in existing:
+            val_parts = val_style.split(';')
+            val_check = val_parts[1] if len(val_parts) > 1 else ''
+            if 'accent' in existing or val_check in existing:
                 child.setStyleSheet(val_style)
             else:
                 child.setStyleSheet(lbl_style)

@@ -26,6 +26,8 @@ class _EpgSearchWorker(QThread):
 
         ch_map = {}
         for ch in self._channels:
+            if self.isInterruptionRequested():
+                return
             name = ch.get('name', '')
             if name and name not in ch_map:
                 ch_map[name] = ch
@@ -43,10 +45,14 @@ class _EpgSearchWorker(QThread):
             return
 
         for epg_id, programs in epg_data.items():
+            if self.isInterruptionRequested():
+                return
             if not isinstance(programs, list):
                 continue
             ch = ch_map.get(epg_id)
             for prog in programs:
+                if self.isInterruptionRequested():
+                    return
                 title = (prog.get('title', '') or '').lower()
                 if keyword in title:
                     key = f"{epg_id}_{prog.get('title', '')}_{prog.get('start', '')}"
@@ -80,7 +86,7 @@ class UnifiedSearchDialog(FloatingDialog):
         self._initial_search_epg = search_epg
         self._initial_search_channel = search_channel
         self._worker = None
-        self._search_timer = QTimer()
+        self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(250)
         self._search_timer.timeout.connect(self._do_search)
@@ -92,6 +98,22 @@ class UnifiedSearchDialog(FloatingDialog):
             get_theme_manager().register_window(self)
         except Exception:
             pass
+
+    def closeEvent(self, event):
+        if self._worker:
+            self._worker.requestInterruption()
+            self._worker.quit()
+            self._worker.wait(3000)
+            self._worker = None
+        try:
+            from ui.theme_manager import get_theme_manager
+            get_theme_manager().unregister_window(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -211,8 +233,9 @@ class UnifiedSearchDialog(FloatingDialog):
             self._epg_results.clear()
             if self._worker and self._worker.isRunning():
                 self._worker.results_ready.disconnect(self._on_epg_search_results)
-                self._worker.terminate()
-                self._worker.wait(100)
+                self._worker.requestInterruption()
+                self._worker.quit()
+                self._worker.wait(2000)
             tr = self.window.language_manager.tr
             self.count_label.setText(tr('search_type_to_search', '输入关键词开始搜索'))
             return
@@ -258,8 +281,9 @@ class UnifiedSearchDialog(FloatingDialog):
             if epg_parser:
                 if self._worker and self._worker.isRunning():
                     self._worker.results_ready.disconnect(self._on_epg_search_results)
-                    self._worker.terminate()
-                    self._worker.wait(100)
+                    self._worker.requestInterruption()
+                    self._worker.quit()
+                    self._worker.wait(2000)
                 channels = list(getattr(w, '_sub_channels', []))
                 self._worker = _EpgSearchWorker(epg_parser, channels, text)
                 self._worker.results_ready.connect(self._on_epg_search_results)

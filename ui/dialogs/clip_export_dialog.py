@@ -9,9 +9,18 @@ import os
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QGroupBox,
-    QFileDialog, QMessageBox, QProgressBar,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QPushButton,
+    QLineEdit,
+    QSpinBox,
+    QDoubleSpinBox,
+    QComboBox,
+    QGroupBox,
+    QFileDialog,
+    QMessageBox,
+    QProgressBar,
 )
 
 from ui.floating_dialog import FloatingDialog
@@ -37,6 +46,9 @@ class ClipExportDialog(FloatingDialog):
             pass
         # 初始化默认值
         QTimer.singleShot(50, self._populate_current_position)
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -217,7 +229,12 @@ class ClipExportDialog(FloatingDialog):
         source = pc.current_url or ''
         # 处理 file:// 协议
         if source.startswith('file://'):
-            source = source[7:]
+            from urllib.parse import urlparse, unquote
+            parsed = urlparse(source)
+            source = unquote(parsed.path)
+            import sys
+            if sys.platform == 'win32' and source.startswith('/') and len(source) > 2 and source[2] == ':':
+                source = source[1:]
         if not source or not os.path.exists(source):
             QMessageBox.warning(self, tr('clip_export_tip', '提示'), tr('clip_export_source_not_found', '源文件不存在: {path}').format(path=source))
             return
@@ -240,14 +257,14 @@ class ClipExportDialog(FloatingDialog):
         self._progress.setFormat(tr('clip_export_exporting', '导出中...') if hasattr(self._progress, 'setFormat') else '')
 
         def _on_done(success, message):
-            # 子线程回调，切回主线程
             def _ui_update():
                 self._set_busy(False)
                 if success:
                     QMessageBox.information(self, tr('clip_export_done', '完成'), message)
                 else:
                     QMessageBox.warning(self, tr('clip_export_failed', '失败'), message)
-            QTimer.singleShot(0, _ui_update)
+            from utils.thread_safety import invoke_on_thread
+            invoke_on_thread(self, _ui_update)
 
         try:
             if fmt == 'gif':
@@ -277,6 +294,9 @@ class ClipExportDialog(FloatingDialog):
         self._progress.setVisible(busy)
 
     def closeEvent(self, event):
+        svc = getattr(self.window, 'clip_export_service', None)
+        if svc and hasattr(svc, 'cancel'):
+            svc.cancel()
         try:
             from ui.theme_manager import get_theme_manager
             get_theme_manager().unregister_window(self)

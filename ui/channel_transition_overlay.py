@@ -1,7 +1,7 @@
 from typing import Optional
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QGraphicsOpacityEffect
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer, Property
-from PySide6.QtGui import QPainter, QColor, QPixmap, QFont
+from PySide6.QtGui import QPixmap, QFont
 from ui.styles import AppStyles
 
 
@@ -16,6 +16,9 @@ class ChannelTransitionOverlay(QWidget):
 
         self._opacity = 0.0
         self._fade_animation = None
+        self._opacity_effect = QGraphicsOpacityEffect(self)
+        self._opacity_effect.setOpacity(0.0)
+        self.setGraphicsEffect(self._opacity_effect)
         self._auto_hide_timer = QTimer(self)
         self._auto_hide_timer.setSingleShot(True)
         self._auto_hide_timer.timeout.connect(self._start_fade_out)
@@ -103,12 +106,9 @@ class ChannelTransitionOverlay(QWidget):
 
         bg_color = colors.get('player_panel', 'rgba(20,20,20,220)')
         r = AppStyles._get_style_border_radius()
-        if bg_color.startswith('rgba('):
-            self._card.setStyleSheet(f"background: {bg_color}; border-radius: {r}px;")
-        else:
-            self._card.setStyleSheet(f"background: {bg_color}; border-radius: {r}px;")
+        self._card.setStyleSheet(f"background: {bg_color}; border-radius: {r}px;")
 
-        self._opacity = 1.0
+        self.set_opacity(1.0)
         self.update()
         self.show()
         self.raise_()
@@ -116,7 +116,13 @@ class ChannelTransitionOverlay(QWidget):
         self._auto_hide_timer.start(1500)
 
     def _start_fade_out(self):
-        self._fade_animation = QPropertyAnimation(self, b"opacity")
+        if self._fade_animation is not None:
+            self._fade_animation.stop()
+            try:
+                self._fade_animation.finished.disconnect()
+            except Exception:
+                pass
+        self._fade_animation = QPropertyAnimation(self, b"opacity", self)
         self._fade_animation.setDuration(300)
         self._fade_animation.setStartValue(1.0)
         self._fade_animation.setEndValue(0.0)
@@ -134,14 +140,6 @@ class ChannelTransitionOverlay(QWidget):
 
     def set_opacity(self, val):
         self._opacity = val
-        self.update()
+        self._opacity_effect.setOpacity(val)
 
     opacity = Property(float, get_opacity, set_opacity)
-
-    def paintEvent(self, event):
-        if self._opacity <= 0:
-            return
-        painter = QPainter(self)
-        painter.setOpacity(self._opacity)
-        painter.end()
-        super().paintEvent(event)

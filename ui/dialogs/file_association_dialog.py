@@ -30,7 +30,12 @@ class FileAssociationDialog(FloatingDialog):
             from core.language_manager import LanguageManager
             self.language_manager = LanguageManager()
             self.language_manager.load_available_languages()
-            self.language_manager.set_language('zh')
+            try:
+                from core.config_manager import ConfigManager
+                lang = ConfigManager().get('language', 'zh')
+                self.language_manager.set_language(lang)
+            except Exception:
+                self.language_manager.set_language('zh')
 
         from ..styles import AppStyles
         self.setStyleSheet(AppStyles.dialog_style())
@@ -41,6 +46,14 @@ class FileAssociationDialog(FloatingDialog):
 
         from ..theme_manager import get_theme_manager
         get_theme_manager().register_window(self)
+
+    def closeEvent(self, event):
+        try:
+            from ..theme_manager import get_theme_manager
+            get_theme_manager().unregister_window(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def _tr(self, key, fallback):
         v = self.language_manager.tr(key, fallback)
@@ -133,18 +146,24 @@ class FileAssociationDialog(FloatingDialog):
         for ext in self._checkboxes:
             if ext.startswith('_'):
                 continue
-            registered = is_extension_registered(ext)
-            self._checkboxes[ext].setChecked(registered)
+            try:
+                registered = is_extension_registered(ext)
+                self._checkboxes[ext].setChecked(registered)
+            except Exception:
+                pass
 
     def _on_ok(self):
         from utils.general_utils import register_extension, unregister_extension
         for ext, cb in self._checkboxes.items():
             if ext.startswith('_'):
                 continue
-            if cb.isChecked():
-                register_extension(ext)
-            else:
-                unregister_extension(ext)
+            try:
+                if cb.isChecked():
+                    register_extension(ext)
+                else:
+                    unregister_extension(ext)
+            except Exception:
+                pass
         self.accept()
 
     def reapply_styles(self):

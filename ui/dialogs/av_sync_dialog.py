@@ -1,8 +1,7 @@
 """音视频同步监控对话框 - 实时显示 A/V 同步状态与历史趋势波形"""
 from collections import deque
-from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer, QRectF
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QLinearGradient, QFont
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -39,95 +38,98 @@ class AVSyncWaveWidget(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = self.rect()
-        if rect.width() <= 0 or rect.height() <= 0:
-            return
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            rect = self.rect()
+            if rect.width() <= 0 or rect.height() <= 0:
+                return
 
-        c = AppStyles._get_colors()
-        bg = QColor(c.get('base', '#1a1a1a'))
-        mid_color = QColor(c.get('mid', '#444'))
-        text_color = QColor(c.get('window_text', '#ffffff'))
-        accent = QColor(c.get('accent', '#3a9'))
+            c = AppStyles._get_colors()
+            bg = QColor(c.get('base', '#1a1a1a'))
+            mid_color = QColor(c.get('mid', '#444'))
+            text_color = QColor(c.get('window_text', '#ffffff'))
+            accent = QColor(c.get('accent', '#3a9'))
 
-        # 背景
-        painter.fillRect(rect, bg)
+            # 背景
+            painter.fillRect(rect, bg)
 
-        # 中线（avdiff=0）
-        cy = rect.height() / 2
-        pen = QPen(mid_color, 1, Qt.PenStyle.DashLine)
-        painter.setPen(pen)
-        painter.drawLine(0, int(cy), rect.width(), int(cy))
+            # 中线（avdiff=0）
+            cy = rect.height() / 2
+            pen = QPen(mid_color, 1, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.drawLine(0, int(cy), rect.width(), int(cy))
 
-        # 中线标签
-        painter.setPen(QPen(text_color))
-        font = QFont()
-        font.setPointSize(8)
-        painter.setFont(font)
-        painter.drawText(4, int(cy) - 2, '0')
-
-        # 计算自适应范围
-        max_abs = 0.1  # 默认 ±0.1s 范围
-        for v in self._samples:
-            a = abs(v)
-            if a > max_abs:
-                max_abs = a
-        # 限制范围避免极端值导致图形不可读
-        max_abs = min(max_abs, 5.0)
-        # 上下各留 10% 边距
-        half_h = (rect.height() * 0.4) / max_abs if max_abs > 0 else 1.0
-
-        # 上下边界标签
-        painter.drawText(4, 12, f'+{max_abs:.2f}s')
-        painter.drawText(4, rect.height() - 4, f'-{max_abs:.2f}s')
-
-        # 绘制波形（填充 + 描边）
-        n = len(self._samples)
-        if n < 2:
+            # 中线标签
             painter.setPen(QPen(text_color))
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, '...')
-            return
+            font = QFont()
+            font.setPointSize(8)
+            painter.setFont(font)
+            painter.drawText(4, int(cy) - 2, '0')
+
+            # 计算自适应范围
+            max_abs = 0.1  # 默认 ±0.1s 范围
+            for v in self._samples:
+                a = abs(v)
+                if a > max_abs:
+                    max_abs = a
+            # 限制范围避免极端值导致图形不可读
+            max_abs = min(max_abs, 5.0)
+            # 上下各留 10% 边距
+            half_h = (rect.height() * 0.4) / max_abs if max_abs > 0 else 1.0
+
+            # 上下边界标签
+            painter.drawText(4, 12, f'+{max_abs:.2f}s')
+            painter.drawText(4, rect.height() - 4, f'-{max_abs:.2f}s')
+
+            # 绘制波形（填充 + 描边）
+            n = len(self._samples)
+            if n < 2:
+                painter.setPen(QPen(text_color))
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, '...')
+                return
 
         # 构建 polygon 点
-        points = []
-        for i, v in enumerate(self._samples):
-            x = rect.width() * i / max(1, self.MAX_POINTS - 1)
-            y = cy - max(-max_abs, min(max_abs, v)) * half_h
-            points.append((x, y))
+            points = []
+            for i, v in enumerate(self._samples):
+                x = rect.width() * i / max(1, self.MAX_POINTS - 1)
+                y = cy - max(-max_abs, min(max_abs, v)) * half_h
+                points.append((x, y))
 
-        # 渐变填充
-        grad = QLinearGradient(0, 0, 0, rect.height())
-        grad.setColorAt(0.0, QColor(accent.red(), accent.green(), accent.blue(), 100))
-        grad.setColorAt(0.5, QColor(accent.red(), accent.green(), accent.blue(), 40))
-        grad.setColorAt(1.0, QColor(accent.red(), accent.green(), accent.blue(), 100))
+            # 渐变填充
+            grad = QLinearGradient(0, 0, 0, rect.height())
+            grad.setColorAt(0.0, QColor(accent.red(), accent.green(), accent.blue(), 100))
+            grad.setColorAt(0.5, QColor(accent.red(), accent.green(), accent.blue(), 40))
+            grad.setColorAt(1.0, QColor(accent.red(), accent.green(), accent.blue(), 100))
 
-        from PySide6.QtGui import QPolygonF
-        from PySide6.QtCore import QPointF
-        poly = QPolygonF()
-        poly.append(QPointF(points[0][0], cy))
-        for x, y in points:
-            poly.append(QPointF(x, y))
-        poly.append(QPointF(points[-1][0], cy))
-        painter.setBrush(QBrush(grad))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawPolygon(poly)
+            from PySide6.QtGui import QPolygonF
+            from PySide6.QtCore import QPointF
+            poly = QPolygonF()
+            poly.append(QPointF(points[0][0], cy))
+            for x, y in points:
+                poly.append(QPointF(x, y))
+            poly.append(QPointF(points[-1][0], cy))
+            painter.setBrush(QBrush(grad))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawPolygon(poly)
 
-        # 描边（根据最新值变色）
-        latest = self._samples[-1]
-        if abs(latest) < 0.04:
-            line_color = accent
-        elif abs(latest) < 0.2:
-            line_color = QColor('#f0ad4e')  # 黄
-        else:
-            line_color = QColor('#d9534f')  # 红
+            # 描边（根据最新值变色）
+            latest = self._samples[-1]
+            if abs(latest) < 0.04:
+                line_color = accent
+            elif abs(latest) < 0.2:
+                line_color = QColor('#f0ad4e')  # 黄
+            else:
+                line_color = QColor('#d9534f')  # 红
 
-        pen = QPen(line_color, 1.5)
-        painter.setPen(pen)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        prev = points[0]
-        for cur in points[1:]:
-            painter.drawLine(QPointF(prev[0], prev[1]), QPointF(cur[0], cur[1]))
-            prev = cur
+            pen = QPen(line_color, 1.5)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            prev = points[0]
+            for cur in points[1:]:
+                painter.drawLine(QPointF(prev[0], prev[1]), QPointF(cur[0], cur[1]))
+                prev = cur
+        finally:
+            painter.end()
 
 
 class AVSyncDialog(FloatingDialog):
@@ -169,6 +171,9 @@ class AVSyncDialog(FloatingDialog):
         # 字幕同步最近 N 次采样窗口（用于平滑 avdiff）
         self._sub_sync_history = deque(maxlen=6)
         self._sub_sync_last_adjust_ts = 0.0
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -275,12 +280,15 @@ class AVSyncDialog(FloatingDialog):
         btn_row = QHBoxLayout()
         minus_btn = QPushButton('-0.1s')
         minus_btn.clicked.connect(lambda: self._adjust_delay(-0.1))
+        minus_btn.setToolTip(tr('av_minus_tooltip', '减小音视频同步偏移'))
         btn_row.addWidget(minus_btn)
         plus_btn = QPushButton('+0.1s')
         plus_btn.clicked.connect(lambda: self._adjust_delay(0.1))
+        plus_btn.setToolTip(tr('av_plus_tooltip', '增大音视频同步偏移'))
         btn_row.addWidget(plus_btn)
         reset_btn = QPushButton(tr('av_sync_reset_delay', 'Reset'))
         reset_btn.clicked.connect(self._reset_delay)
+        reset_btn.setToolTip(tr('av_reset_tooltip', '重置同步偏移'))
         btn_row.addWidget(reset_btn)
         btn_row.addStretch()
         adj_layout.addLayout(btn_row)
@@ -324,6 +332,7 @@ class AVSyncDialog(FloatingDialog):
         close_row.addStretch()
         close_btn = QPushButton(tr('playback_queue_close', 'Close'))
         close_btn.clicked.connect(self.close)
+        close_btn.setToolTip(tr('close_tooltip', '关闭'))
         close_row.addWidget(close_btn)
         layout.addLayout(close_row)
 
@@ -476,8 +485,11 @@ class AVSyncDialog(FloatingDialog):
             # 调整量：将字幕朝向音频对齐方向移动（比例控制）
             delta = avg * gain
             new_delay = pc.adjust_sub_delay(delta)
-            self._sub_sync_status.setText(
-                f'avdiff={avg:+.3f}s → sub_delay={new_delay:+.3f}s (delta={delta:+.3f})')
+            if new_delay is not None:
+                self._sub_sync_status.setText(
+                    f'avdiff={avg:+.3f}s → sub_delay={new_delay:+.3f}s (delta={delta:+.3f})')
+            else:
+                self._sub_sync_status.setText(f'avdiff={avg:+.3f}s (adjust failed)')
         except Exception as e:
             logger.debug(f"字幕自动同步失败: {e}")
 

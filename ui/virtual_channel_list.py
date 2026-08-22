@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional, Callable
-from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget
+from PySide6.QtWidgets import QListWidget, QListWidgetItem
 from PySide6.QtCore import Qt, QTimer, QSize
 from core.log_manager import global_logger as logger
 
@@ -14,7 +14,7 @@ class VirtualChannelListProxy:
         self._loaded_count = 0
         self._is_virtual = False
         self._create_item_func: Optional[Callable] = None
-        self._scroll_timer = QTimer()
+        self._scroll_timer = QTimer(list_widget)
         self._scroll_timer.setSingleShot(True)
         self._scroll_timer.setInterval(50)
         self._scroll_timer.timeout.connect(self._on_scroll_delayed)

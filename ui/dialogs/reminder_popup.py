@@ -85,10 +85,12 @@ class ReminderPopup(FloatingDialog):
         if self._on_switch_callback:
             self._switch_btn = QPushButton(tr('reminder_popup_switch', '切换频道'))
             self._switch_btn.clicked.connect(self._on_switch_clicked)
+            self._switch_btn.setToolTip(tr('switch_channel_tooltip', '切换到该频道'))
             btn_layout.addWidget(self._switch_btn)
 
         self._close_btn = QPushButton(tr('reminder_popup_close', '关闭'))
         self._close_btn.clicked.connect(self.close)
+        self._close_btn.setToolTip(tr('close_tooltip', '关闭'))
         btn_layout.addWidget(self._close_btn)
 
         layout.addLayout(btn_layout)
@@ -132,7 +134,8 @@ class ReminderPopup(FloatingDialog):
         y = geo.bottom() - self.height() - margin
         if self.window and hasattr(self.window, 'epg_reminder_ctrl'):
             ctrl = self.window.epg_reminder_ctrl
-            existing_popups = [p for p in getattr(ctrl, '_active_popups', []) if p is not self and p.isVisible()]
+            get_popups = getattr(ctrl, 'get_active_popups', None)
+            existing_popups = [p for p in (get_popups() if get_popups else getattr(ctrl, '_active_popups', [])) if p is not self and p.isVisible()]
             for p in existing_popups:
                 y = min(y, p.y() - self.height() - gap)
         if y < geo.top() + margin:

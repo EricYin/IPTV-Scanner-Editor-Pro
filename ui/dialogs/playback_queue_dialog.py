@@ -3,9 +3,17 @@ from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
-    QButtonGroup, QRadioButton, QGroupBox, QListWidget, QListWidgetItem,
-    QAbstractItemView, QWidget, QSizePolicy,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QButtonGroup,
+    QRadioButton,
+    QGroupBox,
+    QListWidget,
+    QListWidgetItem,
+    QAbstractItemView,
 )
 
 from ui.floating_dialog import FloatingDialog
@@ -51,6 +59,9 @@ class PlaybackQueueDialog(FloatingDialog):
     def _queue_ctrl(self) -> Optional[object]:
         qc = getattr(self.window, 'file_queue_ctrl', None)
         return qc
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -108,10 +119,12 @@ class PlaybackQueueDialog(FloatingDialog):
         action_row = QHBoxLayout()
         cycle_btn = QPushButton(tr('playback_queue_cycle_mode', 'Cycle Loop Mode'))
         cycle_btn.clicked.connect(lambda: self._call_queue('cycle_queue_mode'))
+        cycle_btn.setToolTip(tr('cycle_tooltip', '循环播放开关'))
         action_row.addWidget(cycle_btn)
 
         shuffle_btn = QPushButton(tr('playback_queue_toggle_shuffle', 'Toggle Shuffle'))
         shuffle_btn.clicked.connect(lambda: self._call_queue('toggle_shuffle'))
+        shuffle_btn.setToolTip(tr('shuffle_tooltip', '随机播放开关'))
         action_row.addWidget(shuffle_btn)
         action_row.addStretch()
         qg_layout.addLayout(action_row)
@@ -125,14 +138,17 @@ class PlaybackQueueDialog(FloatingDialog):
 
         set_a_btn = QPushButton(tr('playback_queue_ab_set_a', 'Set A Point\tA'))
         set_a_btn.clicked.connect(lambda: self._call_queue('ab_loop_set_a'))
+        set_a_btn.setToolTip(tr('set_a_tooltip', '设置A点'))
         ab_layout.addWidget(set_a_btn, 0, 0)
 
         set_b_btn = QPushButton(tr('playback_queue_ab_set_b', 'Set B Point\tB'))
         set_b_btn.clicked.connect(lambda: self._call_queue('ab_loop_set_b'))
+        set_b_btn.setToolTip(tr('set_b_tooltip', '设置B点'))
         ab_layout.addWidget(set_b_btn, 0, 1)
 
         clear_ab_btn = QPushButton(tr('playback_queue_ab_clear', 'Clear A-B\tC'))
         clear_ab_btn.clicked.connect(lambda: self._call_queue('ab_loop_clear'))
+        clear_ab_btn.setToolTip(tr('clear_ab_tooltip', '清除AB段'))
         ab_layout.addWidget(clear_ab_btn, 0, 2)
 
         self._ab_status_label = QLabel(tr('playback_queue_ab_inactive', 'Inactive'))
@@ -256,8 +272,10 @@ class PlaybackQueueDialog(FloatingDialog):
         a = status.get('a')
         b = status.get('b')
         active = status.get('active', False)
-        if active:
+        if active and a is not None and b is not None:
             text = tr('playback_queue_ab_active', 'Active (A={a:.2f}s, B={b:.2f}s)').format(a=a, b=b)
+        elif active:
+            text = tr('playback_queue_ab_inactive', 'Inactive')
         elif a is not None and b is None:
             text = tr('playback_queue_ab_only_a', 'A set ({a:.2f}s)').format(a=a)
         elif b is not None and a is None:

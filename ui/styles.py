@@ -1,5 +1,5 @@
 import os
-import sys
+
 import tempfile
 import atexit
 import shutil
@@ -75,6 +75,7 @@ class AppStyles:
     _spinup_cache = {}
     _spindown_cache = {}
     _icon_cache = {}
+    _cache_lock = __import__('threading').Lock()
     _sort_up_cache = {}
     _sort_down_cache = {}
     _colors_cache = None
@@ -101,27 +102,28 @@ class AppStyles:
         """通用 SVG 图标缓存辅助：将 SVG 写入临时文件（每种变体只写一次），
         返回文件路径供 Qt QSS image: url(...) 使用。
         Qt 的 QSS 不支持 data URI，必须使用文件路径。"""
-        if filename_prefix in cache:
-            return cache[filename_prefix]
-        path = os.path.join(_SVG_TMPDIR, f'{filename_prefix}.svg')
-        try:
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    if f.read() == svg_content:
-                        path = path.replace('\\', '/')
-                        cache[filename_prefix] = path
-                        return path
-        except Exception:
-            pass
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(svg_content)
-        except Exception:
-            pass
-        # Qt QSS 在 Windows 下需要正斜杠路径
-        path = path.replace('\\', '/')
-        cache[filename_prefix] = path
-        return path
+        with cls._cache_lock:
+            if filename_prefix in cache:
+                return cache[filename_prefix]
+            path = os.path.join(_SVG_TMPDIR, f'{filename_prefix}.svg')
+            try:
+                if os.path.exists(path):
+                    with open(path, 'r', encoding='utf-8') as f:
+                        if f.read() == svg_content:
+                            path = path.replace('\\', '/')
+                            cache[filename_prefix] = path
+                            return path
+            except Exception:
+                pass
+            try:
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(svg_content)
+            except Exception:
+                pass
+            # Qt QSS 在 Windows 下需要正斜杠路径
+            path = path.replace('\\', '/')
+            cache[filename_prefix] = path
+            return path
 
     @classmethod
     def _safe_fallback(cls, key: str) -> str:
@@ -871,11 +873,10 @@ class AppStyles:
         'ios': _style_modifier_ios,
     }
 
-    THEME_COLORS = COLOR_PALETTES
 
     @classmethod
     def _detect_system_color_mode(cls):
-        from utils.platform_utils import is_android
+        from utils.platform_utils import is_android, is_macos, is_windows, is_linux
         if is_android():
             try:
                 from PySide6.QtCore import QGuiApplication, Qt
@@ -887,7 +888,7 @@ class AppStyles:
                         return 'light'
             except Exception:
                 pass
-        if sys.platform == 'darwin':
+        if is_macos():
             try:
                 import subprocess
                 result = subprocess.run(
@@ -899,7 +900,7 @@ class AppStyles:
                 return 'light'
             except Exception:
                 pass
-        if sys.platform == 'win32':
+        if is_windows():
             try:
                 import ctypes
                 registry = ctypes.windll.advapi32
@@ -912,6 +913,31 @@ class AppStyles:
                     registry.RegQueryValueExW(key.value, 'AppsUseLightTheme', 0, None, ctypes.byref(value), ctypes.byref(size))
                     registry.RegCloseKey(key.value)
                     return 'light' if value.value == 1 else 'dark'
+            except Exception:
+                pass
+        try:
+            from PySide6.QtCore import QGuiApplication, Qt
+            if QGuiApplication.instance():
+                color_scheme = QGuiApplication.styleHints().colorScheme()
+                if color_scheme == Qt.ColorScheme.Dark:
+                    return 'dark'
+                elif color_scheme == Qt.ColorScheme.Light:
+                    return 'light'
+        except Exception:
+            pass
+        if is_linux():
+            try:
+                import subprocess as _sp
+                result = _sp.run(
+                    ['gsettings', 'get', 'org.gnome.desktop.interface', 'color-scheme'],
+                    capture_output=True, text=True, timeout=3
+                )
+                if result.returncode == 0:
+                    val = result.stdout.strip()
+                    if 'dark' in val:
+                        return 'dark'
+                    if 'light' in val:
+                        return 'light'
             except Exception:
                 pass
         try:
@@ -938,9 +964,9 @@ class AppStyles:
     def _get_colors(cls):
         effective_mode = cls._get_effective_color_mode()
         cache_key = (effective_mode, cls._visual_style)
-        if cls._colors_cache is not None and cls._colors_cache_key == cache_key:
-            return cls._colors_cache
-        effective_mode = cls._get_effective_color_mode()
+        with cls._cache_lock:
+            if cls._colors_cache is not None and cls._colors_cache_key == cache_key:
+                return cls._colors_cache
         base_colors = cls.COLOR_PALETTES.get(effective_mode, cls.COLOR_PALETTES['dark'])
         style = cls._visual_style
         if style == 'neumorphic':
@@ -957,8 +983,9 @@ class AppStyles:
             result = cls._style_modifier_ios(base_colors.copy(), effective_mode)
         else:
             result = base_colors.copy()
-        cls._colors_cache = result
-        cls._colors_cache_key = cache_key
+        with cls._cache_lock:
+            cls._colors_cache = result
+            cls._colors_cache_key = cache_key
         return result
 
     @classmethod
@@ -1019,12 +1046,13 @@ class AppStyles:
 
     @classmethod
     def _invalidate_caches(cls):
-        cls._colors_cache = None
-        cls._colors_cache_key = None
-        for cache in (cls._icon_cache, cls._arrow_cache, cls._check_cache,
-                      cls._radio_cache, cls._spinup_cache, cls._spindown_cache,
-                      cls._sort_up_cache, cls._sort_down_cache):
-            cache.clear()
+        with cls._cache_lock:
+            cls._colors_cache = None
+            cls._colors_cache_key = None
+            for cache in (cls._icon_cache, cls._arrow_cache, cls._check_cache,
+                          cls._radio_cache, cls._spinup_cache, cls._spindown_cache,
+                          cls._sort_up_cache, cls._sort_down_cache):
+                cache.clear()
         try:
             if os.path.isdir(_SVG_TMPDIR):
                 for f in os.listdir(_SVG_TMPDIR):
@@ -1155,18 +1183,23 @@ class AppStyles:
 
     @classmethod
     def _get_style_font_family(cls):
-        import sys
-        is_mac = sys.platform == 'darwin'
-        is_linux = sys.platform.startswith('linux')
+        from utils.platform_utils import is_macos, is_linux, is_android
         cjk = "'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif"
-        if is_mac:
+        if is_android():
+            fonts = {
+                'win11': f"'Roboto', 'Noto Sans', {cjk}",
+                'mac': f"'Roboto', 'Noto Sans', {cjk}",
+                'ios': f"'Roboto', 'Noto Sans', {cjk}",
+            }
+            return fonts.get(cls._visual_style, f"'Roboto', 'Noto Sans', {cjk}")
+        if is_macos():
             fonts = {
                 'win11': f"'Helvetica Neue', {cjk}",
                 'mac': f"'SF Pro Display', 'Helvetica Neue', {cjk}",
                 'ios': f"'SF Pro Display', 'Helvetica Neue', {cjk}",
             }
             return fonts.get(cls._visual_style, f"'Helvetica Neue', {cjk}")
-        if is_linux:
+        if is_linux():
             fonts = {
                 'win11': f"'Noto Sans', 'Ubuntu', {cjk}",
                 'mac': f"'Noto Sans', 'Helvetica Neue', {cjk}",
@@ -1404,19 +1437,19 @@ class AppStyles:
             )
         elif style == 'frosted':
             return (
-                f"background-color: transparent; width: 10px; border: none;",
+                "background-color: transparent; width: 10px; border: none;",
                 f"background-color: {c.get('frosted_border_mid', c['mid'])}; border: 1px solid {c.get('frosted_border', c['mid'])}; border-radius: {r}px; min-height: 40px; margin: 2px;",
                 f"background-color: {c.get('frosted_border_strong', c['mid'])}; border: 1px solid {c.get('frosted_border_mid', c['mid'])}; border-radius: {r}px; min-height: 40px; margin: 2px;"
             )
         elif style == 'win11':
             return (
-                f"background-color: transparent; width: 10px; border: none;",
+                "background-color: transparent; width: 10px; border: none;",
                 f"background-color: {c.get('border_thin', c['mid'])}; border: none; border-radius: {r}px; min-height: 40px; margin: 2px;",
                 f"background-color: {c['mid']}; border: none; border-radius: {r}px; min-height: 40px; margin: 2px;"
             )
         elif style in ('mac', 'ios'):
             return (
-                f"background-color: transparent; width: 8px; border: none;",
+                "background-color: transparent; width: 8px; border: none;",
                 f"background-color: {c['mid']}; border: none; border-radius: {r}px; min-height: 30px; margin: 2px;",
                 f"background-color: {c['accent']}; border: none; border-radius: {r}px; min-height: 30px; margin: 2px;"
             )
@@ -1450,7 +1483,7 @@ class AppStyles:
             return f"background-color: {bg}; {border} border-radius: {indicator_r}px;"
         elif style in ('mac', 'ios'):
             bg = c['accent'] if checked else c['alternate_base']
-            border = f"border: none;" if not checked else "border: none;"
+            border = "border: none;" if not checked else "border: none;"
             return f"background-color: {bg}; {border} border-radius: {indicator_r}px;"
         bg = c['accent'] if checked else c['alternate_base']
         border = f"border: 2px solid {c['accent']};" if checked else f"border: 2px solid {c['mid']};"
@@ -1960,32 +1993,32 @@ class AppStyles:
         if style == 'neumorphic':
             sb_dec = f"background-color: {sb_bg}; {AppStyles._get_style_raised()}"
             combo_dec = f"background-color: {colors['player_combo']}; {AppStyles._get_style_inset()} border-radius: {r}px;"
-            list_dec = f"border: none; background-color: transparent;"
+            list_dec = "border: none; background-color: transparent;"
             btn_dec = f"background-color: {colors['player_button']}; {AppStyles._get_style_raised()} border-radius: {r}px;"
         elif style == 'skeuomorphic':
             sb_dec = f"background-color: {sb_bg}; border: 1px outset {colors.get('border_3d_light', colors['mid'])};"
             combo_dec = f"border: 1px inset {colors.get('border_3d_dark', colors['mid'])}; background-color: {colors['player_combo']}; border-radius: {r}px;"
-            list_dec = f"border: none; background-color: transparent;"
+            list_dec = "border: none; background-color: transparent;"
             btn_dec = f"background-color: {colors['player_button']}; border: 1px outset {colors.get('border_3d_light', colors['mid'])}; border-radius: {r}px;"
         elif style == 'frosted':
             sb_dec = f"background-color: {sb_bg}; border: 1px solid {colors.get('frosted_border', colors['mid'])};"
             combo_dec = f"border: 1px solid {colors.get('frosted_border', colors['mid'])}; background-color: {colors['player_combo']}; border-radius: {r}px;"
-            list_dec = f"border: none; background-color: transparent;"
+            list_dec = "border: none; background-color: transparent;"
             btn_dec = f"background-color: {colors['player_button']}; border: 1px solid {colors.get('frosted_border', colors['mid'])}; border-radius: {r}px;"
         elif style == 'win11':
             sb_dec = f"background-color: {sb_bg}; border-top: 1px solid {colors.get('border_thin', colors['mid'])};"
             combo_dec = f"border: 1px solid {colors.get('border_thin', colors['mid'])}; background-color: {colors['player_combo']}; border-radius: {r}px; border-bottom: 2px solid {colors['accent']};"
-            list_dec = f"border: none; background-color: transparent;"
+            list_dec = "border: none; background-color: transparent;"
             btn_dec = f"background-color: {colors['player_button']}; border: 1px solid {colors.get('border_thin', colors['mid'])}; border-radius: {r}px;"
         elif style in ('mac', 'ios'):
             sb_dec = f"background-color: {sb_bg}; border: none;"
             combo_dec = f"border: none; background-color: {colors['player_combo']}; border-radius: {r}px;"
-            list_dec = f"border: none; background-color: transparent;"
+            list_dec = "border: none; background-color: transparent;"
             btn_dec = f"background-color: {colors['player_button']}; border: none; border-radius: {r}px;"
         else:
             sb_dec = f"background-color: {sb_bg}; border: 1px solid {colors['mid']};"
             combo_dec = f"border: 1px solid {colors['mid']}; background-color: {colors['player_combo']}; border-radius: {r}px;"
-            list_dec = f"border: none; background-color: transparent;"
+            list_dec = "border: none; background-color: transparent;"
             btn_dec = f"background-color: {colors['player_button']}; border: 1px solid {colors.get('player_line', colors['mid'])}; border-radius: {r}px;"
         return f"""
             QStatusBar {{
@@ -2215,7 +2248,7 @@ class AppStyles:
         return f"""
             QLabel {{
                 color: {colors['player_success']};
-                font-size: 13px;
+                font-size: 14px;
                 background-color: transparent;
                 padding: 0px;
                 margin: 0px;
@@ -2244,7 +2277,7 @@ class AppStyles:
         return f"""
             QLabel {{
                 color: {colors['player_panel_secondary']};
-                font-size: 14px;
+                font-size: 12px;
                 background-color: transparent;
                 background: transparent;
                 padding: 0px;
@@ -3281,12 +3314,15 @@ class AppStyles:
         btn_pressed = AppStyles._style_btn_decoration(colors, pressed=True)
         btn_disabled = AppStyles._style_btn_decoration(colors, disabled=True)
         pad = AppStyles._style_padding('button')
+        from utils.platform_utils import get_touch_target_size, is_touch_device
+        touch_h = get_touch_target_size() if is_touch_device() else 0
         return f"""
             QPushButton {{
                 color: {colors['window_text']};
                 {btn_dec}
                 padding: {pad};
                 min-width: 0px;
+                min-height: {touch_h}px;
                 font-weight: 500;
                 font-size: 12px;
                 font-family: {ff};

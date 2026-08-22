@@ -1,7 +1,7 @@
 import re
 from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QPainter, QColor, QFont
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QPainter, QColor, QFont, QLinearGradient, QPen, QBrush
 
 
 def parse_lrc(lrc_text):
@@ -54,11 +54,18 @@ class LyricsWidget(QWidget):
         self._scroll_y = 0.0
         self._target_y = 0.0
         self._line_height = 52
-        self._font = QFont("Microsoft YaHei", 16)
-        self._font_current = QFont("Microsoft YaHei", 22, QFont.Weight.Bold)
+        from ui.styles import AppStyles
+        _family = AppStyles._get_style_font_family().split(",")[0].strip("' ")
+        _family = _family if _family else "sans-serif"
+        self._font = QFont(_family, 16)
+        self._font_current = QFont(_family, 22, QFont.Weight.Bold)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
+
+    def reapply_styles(self):
+        """主题切换时刷新绘制"""
+        self.update()
         self._timer.setInterval(40)
 
     def set_lyrics(self, lrc_text, is_lrc=True):
@@ -160,12 +167,12 @@ class LyricsWidget(QWidget):
             baseline_y = y + text_height / 2.0
 
             if distance == 0:
-                from PySide6.QtGui import QLinearGradient
+
                 grad = QLinearGradient(x, baseline_y, x + text_width, baseline_y)
                 grad.setColorAt(0, QColor(80, 180, 255, alpha))
                 grad.setColorAt(0.5, QColor(255, 255, 255, alpha))
                 grad.setColorAt(1, QColor(80, 180, 255, alpha))
-                painter.setPen(QColor(255, 255, 255, alpha))
+                painter.setPen(QPen(QBrush(grad), 1))
 
             painter.drawText(int(x), int(baseline_y), text)
 

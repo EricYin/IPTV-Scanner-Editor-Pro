@@ -1,11 +1,9 @@
 from typing import Dict, Any, List
 from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLineEdit,
                               QListWidget, QListWidgetItem, QLabel)
-from PySide6.QtCore import Qt, QSize, Signal, QThread, QTimer
-from PySide6 import QtWidgets
+from PySide6.QtCore import Qt, Signal, QThread, QTimer
 from ui.styles import AppStyles
 from ui.floating_dialog import FloatingDialog
-from core.log_manager import global_logger as logger
 
 
 class _EpgSearchWorker(QThread):
@@ -39,10 +37,14 @@ class _EpgSearchWorker(QThread):
             return
 
         for epg_id, programs in epg_data.items():
+            if self.isInterruptionRequested():
+                return
             if not isinstance(programs, list):
                 continue
             ch = ch_map.get(epg_id)
             for prog in programs:
+                if self.isInterruptionRequested():
+                    return
                 title = (prog.get('title', '') or '').lower()
                 if keyword in title:
                     key = f"{epg_id}_{prog.get('title', '')}_{prog.get('start', '')}"
@@ -71,7 +73,7 @@ class EpgSearchDialog(FloatingDialog):
         self._results: List[Dict[str, Any]] = []
         self._result_channels: List[Dict[str, Any]] = []
         self._worker = None
-        self._search_timer = QTimer()
+        self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(300)
         self._search_timer.timeout.connect(self._do_search)
@@ -83,6 +85,24 @@ class EpgSearchDialog(FloatingDialog):
             get_theme_manager().register_window(self)
         except Exception:
             pass
+
+        QTimer.singleShot(0, self.search_input.setFocus)
+
+    def closeEvent(self, event):
+        if getattr(self, '_worker', None):
+            self._worker.requestInterruption()
+            self._worker.quit()
+            self._worker.wait(3000)
+            self._worker = None
+        try:
+            from ui.theme_manager import get_theme_manager
+            get_theme_manager().unregister_window(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
+    def reapply_styles(self):
+        self._apply_theme()
 
     def _apply_theme(self):
         c = AppStyles._get_colors()

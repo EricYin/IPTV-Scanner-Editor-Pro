@@ -49,6 +49,9 @@ class Video3DDialog(FloatingDialog):
         # 初始回填当前 mpv 状态
         self._reload_from_player()
 
+    def reapply_styles(self):
+        self._apply_theme()
+
     def _apply_theme(self):
         c = AppStyles._get_colors()
         r = AppStyles._get_style_border_radius()
@@ -137,10 +140,13 @@ class Video3DDialog(FloatingDialog):
         btn_row = QHBoxLayout()
         self.reset_btn = QPushButton(tr('video_3d_reset', '重置全部'))
         self.reset_btn.clicked.connect(self._reset_all)
+        self.reset_btn.setToolTip(tr('reset_3d_tooltip', '重置3D设置'))
         self.apply_btn = QPushButton(tr('video_3d_apply', '应用'))
         self.apply_btn.clicked.connect(self._apply_now)
+        self.apply_btn.setToolTip(tr('apply_3d_tooltip', '应用3D设置'))
         self.close_btn = QPushButton(tr('video_3d_close', '关闭'))
         self.close_btn.clicked.connect(self.close)
+        self.close_btn.setToolTip(tr('close_tooltip', '关闭'))
         btn_row.addWidget(self.reset_btn)
         btn_row.addStretch()
         btn_row.addWidget(self.apply_btn)
