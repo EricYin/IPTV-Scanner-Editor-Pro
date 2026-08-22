@@ -71,10 +71,17 @@ class IPTVServer:
             return
         self._running = False
         if self._loop and self._loop.is_running():
-            asyncio.run_coroutine_threadsafe(self._async_stop(), self._loop)
+            try:
+                asyncio.run_coroutine_threadsafe(self._async_stop(), self._loop)
+            except RuntimeError:
+                pass
         if self._thread:
             self._thread.join(timeout=5)
         self._thread = None
+        self.app = None
+        self.runner = None
+        self.site = None
+        self._loop = None
         logger.info("IPTV Server 已停止")
 
     def is_running(self):
@@ -92,7 +99,7 @@ class IPTVServer:
             self._loop.run_until_complete(self._async_start())
             self._loop.run_forever()
         except Exception as e:
-            logger.error(f"Server运行异常: {e}")
+            logger.error(f"Server运行异常: {e}", exc_info=True)
         finally:
             # 确保 _running 标志在异常退出时也被重置，否则 stop() 会卡死
             self._running = False
@@ -115,30 +122,43 @@ class IPTVServer:
                 await self.site.stop()
             if self.runner:
                 await self.runner.cleanup()
+            # 关闭共享的流代理 ClientSession
+            from server import routes as _routes
+            session = _routes._stream_session
+            if session and not session.closed:
+                await session.close()
+            _routes._stream_session = None
         except Exception as e:
-            logger.error(f"Server停止异常: {e}")
+            logger.error(f"Server停止异常: {e}", exc_info=True)
+        finally:
+            if self._loop and self._loop.is_running():
+                self._loop.call_soon(self._loop.stop)
 
 
 _server_instance: Optional[IPTVServer] = None
+_server_lock = threading.Lock()
 
 
 def get_server() -> IPTVServer:
     global _server_instance
-    if _server_instance is None:
-        _server_instance = IPTVServer()
-    return _server_instance
+    with _server_lock:
+        if _server_instance is None:
+            _server_instance = IPTVServer()
+        return _server_instance
 
 
 def start_server(host='0.0.0.0', port=8080):
     global _server_instance
-    if _server_instance and _server_instance.is_running():
+    with _server_lock:
+        if _server_instance and _server_instance.is_running():
+            return _server_instance
+        _server_instance = IPTVServer(host=host, port=port)
+        _server_instance.start()
         return _server_instance
-    _server_instance = IPTVServer(host=host, port=port)
-    _server_instance.start()
-    return _server_instance
 
 
 def stop_server():
     global _server_instance
     if _server_instance:
         _server_instance.stop()
+        _server_instance = None

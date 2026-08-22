@@ -3,37 +3,45 @@ import contextlib
 import ipaddress
 import logging
 import os
+import re
+import secrets as _secrets_mod
 from datetime import datetime, timezone, timedelta
-from aiohttp import web, web_response
+from aiohttp import web
 from urllib.parse import urlparse
 
 from server.app import get_channel_model, get_config, get_main_window, get_server, get_context
-from utils.platform_utils import get_android_data_dir
+from utils.platform_utils import get_android_data_dir, is_android
 
 logger = logging.getLogger('server.routes')
 
 # --- 安全配置 ---
 # 认证 Token：通过环境变量 ISEP_AUTH_TOKEN 或配置文件 [Server] auth_token 设置
-# 为空时表示不需要认证（仅限 localhost 场景）
+# 为空时自动生成随机 Token 并输出到日志，防止局域网未授权访问
 _AUTH_TOKEN = os.environ.get('ISEP_AUTH_TOKEN', '').strip()
+if not _AUTH_TOKEN:
+
+    _AUTH_TOKEN = _secrets_mod.token_hex(16)
+    logger.warning(f'未设置 ISEP_AUTH_TOKEN 环境变量，已自动生成认证 Token（前8位）: {_AUTH_TOKEN[:8]}...')
 
 # 允许的流代理 URL 协议
 _ALLOWED_STREAM_PROTOCOLS = {'http', 'https', 'rtsp', 'rtmp', 'rtp', 'udp', 'srt'}
 
 # 共享 aiohttp ClientSession（流代理用），延迟初始化
 _stream_session = None
+_stream_session_lock = asyncio.Lock()
 
 
-def _get_stream_session():
+async def _get_stream_session():
     """获取共享的 aiohttp ClientSession，避免每个请求创建新连接池"""
     global _stream_session
-    if _stream_session is None or _stream_session.closed:
-        import aiohttp
-        _stream_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=30),
-            connector=aiohttp.TCPConnector(limit=20, limit_per_host=5)
-        )
-    return _stream_session
+    async with _stream_session_lock:
+        if _stream_session is None or _stream_session.closed:
+            import aiohttp
+            _stream_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=30),
+                connector=aiohttp.TCPConnector(limit=20, limit_per_host=5)
+            )
+        return _stream_session
 
 
 def _is_private_ip(host: str) -> bool:
@@ -42,12 +50,13 @@ def _is_private_ip(host: str) -> bool:
         return True
     try:
         ip = ipaddress.ip_address(host)
+        # 组播地址（224.0.0.0-239.255.255.255）不视为私有，允许 IPTV 组播流
+        if ip.is_multicast:
+            return False
         return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
     except ValueError:
-        # 非 IP 格式的主机名，保守视为私有
-        if host in ('localhost', '0', ):
-            return True
-        return False
+        # 非 IP 格式的主机名，保守视为私有（防止 DNS rebinding 绕过）
+        return True
 
 
 def _is_safe_stream_url(url: str) -> tuple:
@@ -64,7 +73,7 @@ def _is_safe_stream_url(url: str) -> tuple:
         host = parsed.hostname or ''
         if not host:
             return False, '无法解析主机名'
-        # 对 HTTP/HTTPS 协议进行 SSRF 防护
+        # 仅对 HTTP/HTTPS 执行 SSRF 防护（rtp/udp/rtsp 等流媒体协议豁免）
         if scheme in ('http', 'https') and _is_private_ip(host):
             return False, f'内网地址不允许代理: {host}'
         return True, ''
@@ -93,7 +102,7 @@ def _parse_xmltv_time(time_str: str):
     except (ValueError, TypeError):
         pass
     # 尝试 XMLTV 格式: YYYYMMDDHHmmss [+-]ZZZZ
-    import re
+
     m = re.match(r'^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?$', s)
     if m:
         year, month, day, hour, minute, second = (int(m.group(i)) for i in range(1, 7))
@@ -359,11 +368,17 @@ async def handle_ws_logs(request):
     连接后持续读取 app.log 文件尾部，有新行时推送到客户端。
     客户端通过 WebSocket 接收日志行，实现实时日志流。
     """
+    # 认证检查：从查询参数获取 token
+    ws_token = request.rel_url.query.get('token', '').strip()
+    if _AUTH_TOKEN and ws_token != _AUTH_TOKEN:
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        await ws.close(code=4001, message=b'Unauthorized')
+        return ws
+
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    import asyncio
-    import os
     from core.log_manager import global_logger
 
     # 确定日志文件路径
@@ -424,16 +439,17 @@ async def handle_ws_logs(request):
     return ws
 
 
-# 允许通过认证的路由前缀（非 /api/ 的只读路由不需要认证）
-_AUTH_EXEMPT_PREFIXES = ('/', '/admin', '/stream/')
+# 免认证路由前缀（仅首页和静态资源）
+_AUTH_EXEMPT_PREFIXES = ('/',)
 
 
 def _is_auth_required(request):
     """判断请求是否需要认证"""
     path = request.path
-    # 非 API 路由免认证
-    if not path.startswith('/api/'):
-        return False
+    # 首页和静态资源免认证
+    for prefix in _AUTH_EXEMPT_PREFIXES:
+        if path == prefix:
+            return False
     # 如果未配置 Token，免认证（仅限 localhost 场景）
     if not _AUTH_TOKEN:
         return False
@@ -456,7 +472,7 @@ async def auth_middleware(request, handler):
         token = auth_header[7:].strip()
     if not token:
         token = request.rel_url.query.get('token', '').strip()
-    if token != _AUTH_TOKEN:
+    if not _secrets_mod.compare_digest(token, _AUTH_TOKEN):
         return web.json_response(
             {'success': False, 'error': '未授权访问'}, status=401
         )
@@ -473,11 +489,11 @@ async def cors_middleware(request, handler):
     origin = request.headers.get('Origin', '')
     if _is_localhost_origin(origin):
         resp.headers['Access-Control-Allow-Origin'] = origin
+        resp.headers['Access-Control-Allow-Credentials'] = 'true'
     else:
         resp.headers['Access-Control-Allow-Origin'] = 'null'
     resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    resp.headers['Access-Control-Allow-Credentials'] = 'true'
     return resp
 
 
@@ -488,7 +504,7 @@ def _is_localhost_origin(origin: str) -> bool:
     try:
         parsed = urlparse(origin)
         host = parsed.hostname or ''
-        return host in ('localhost', '127.0.0.1', '::1') or _is_private_ip(host)
+        return host in ('localhost', '127.0.0.1', '::1')
     except (ValueError, TypeError):
         return False
 
@@ -500,8 +516,8 @@ async def error_middleware(request, handler):
     except web.HTTPException:
         raise
     except Exception as e:
-        logger.error(f"API错误: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        logger.error(f"API错误: {e}", exc_info=True)
+        return web.json_response({'error': '内部服务器错误'}, status=500)
 
 
 def _json_success(data=None, **kwargs):
@@ -767,7 +783,7 @@ async def handle_status(request):
 async def handle_m3u(request):
     channels = _get_all_channels()
     if not channels:
-        return _json_error('暂无频道数据', 503)
+        return web.Response(text='#EXTM3U\n', content_type='audio/mpegurl')
     group_filter = request.match_info.get('group', None)
     valid_only = request.rel_url.query.get('valid', '0') == '1'
     search = request.rel_url.query.get('search', '').strip().lower()
@@ -810,8 +826,8 @@ async def handle_m3u(request):
 async def handle_channels_list(request):
     try:
         ctx = get_context()
-        # 直接读取已加载的 channels，不触发 reload_if_needed（避免同步加载导致请求超时）
-        all_channels = ctx._channels if ctx else []
+        # 使用 get_all_channels 加锁复制，避免并发修改崩溃
+        all_channels = ctx.get_all_channels() if ctx else []
         if not all_channels:
             # 返回空列表而非 503，让前端正常显示"暂无频道"
             return _json_success(
@@ -906,18 +922,19 @@ async def handle_channel_update(request):
     if model and 0 <= idx < model.rowCount():
         model.update_channel(idx, data)
     elif ctx and hasattr(ctx, '_channels') and 0 <= idx < len(ctx._channels):
-        # standalone 模式（Android）：直接更新内存中的频道并持久化
-        with getattr(ctx, '_channels_lock', _noop_lock):
-            if 0 <= idx < len(ctx._channels):
-                ctx._channels[idx].update(data)
-        ctx._save_channels_to_cache()
+        # standalone 模式（Android）：调用带锁方法
+        ctx.update_channel(idx, data)
     else:
         mw = get_main_window()
         if mw:
-            for ch_list in (getattr(mw, '_sub_channels', []), getattr(mw, '_local_channels', [])):
-                if 0 <= idx < len(ch_list):
-                    ch_list[idx].update(data)
-                    break
+            sub_len = len(getattr(mw, '_sub_channels', []))
+            if idx < sub_len:
+                mw._sub_channels[idx].update(data)
+            else:
+                local_idx = idx - sub_len
+                local_list = getattr(mw, '_local_channels', [])
+                if 0 <= local_idx < len(local_list):
+                    local_list[local_idx].update(data)
     return _json_success()
 
 
@@ -931,9 +948,8 @@ async def handle_channel_delete(request):
     if model and 0 <= idx < model.rowCount():
         model.remove_channel(idx)
     elif ctx and hasattr(ctx, '_channels') and 0 <= idx < len(ctx._channels):
-        # standalone 模式（Android）：直接从内存列表删除并持久化
-        ctx._channels.pop(idx)
-        ctx._save_channels_to_cache()
+        # standalone 模式（Android）：调用带锁方法
+        ctx.delete_channel(idx)
     return _json_success()
 
 
@@ -964,10 +980,8 @@ async def handle_channel_add(request):
     if model:
         model.add_channel(data)
     elif ctx and hasattr(ctx, '_channels'):
-        # standalone 模式（Android）：直接追加到内存列表并持久化
-        data['id'] = len(ctx._channels) + 1
-        ctx._channels.append(data)
-        ctx._save_channels_to_cache()
+        # standalone 模式（Android）：调用带锁方法
+        ctx.add_channel(data)
     return _json_success()
 
 
@@ -1031,8 +1045,8 @@ async def handle_channels_batch(request):
             model.layoutAboutToBeChanged.emit()
             model.layoutChanged.emit()
         if ctx and hasattr(ctx, '_channels'):
-            with getattr(ctx, '_channels_lock', _noop_lock):
-                ctx._save_channels_to_cache()
+            # _save_channels_to_cache 内部已有锁保护，不再外加锁（避免死锁）
+            ctx._save_channels_to_cache()
 
     if action == 'auto_classify':
         try:
@@ -1140,11 +1154,12 @@ async def handle_channels_batch(request):
         except ImportError:
             category_order = []
 
+        category_index = {cat: i for i, cat in enumerate(category_order)}
+
         def _sort_key(ch):
             group = ch.get('group', '')
-            if category_order:
-                cat_idx = (category_order.index(group)
-                           if group in category_order else 99)
+            if category_index:
+                cat_idx = category_index.get(group, 99)
             else:
                 cat_idx = 0
             return (cat_idx, ch.get('name', ''))
@@ -1764,11 +1779,11 @@ async def handle_stream_proxy(request):
     if not is_safe:
         logger.warning(f'Stream proxy blocked: {stream_url} - {reject_reason}')
         return _json_error(f'不允许的流地址: {reject_reason}', 403)
-    session = _get_stream_session()
+    session = await _get_stream_session()
     try:
         async with session.get(stream_url) as resp:
             content_type = resp.headers.get('Content-Type', 'video/mp2t')
-            response = web_response.StreamResponse(
+            response = web.StreamResponse(
                 status=resp.status,
                 headers={'Content-Type': content_type}
             )
@@ -1986,8 +2001,10 @@ async def handle_share_file(request):
         elif sys.platform == 'darwin':
             import subprocess
             subprocess.Popen(['open', '-R', path])
+        elif is_android():
+            return _json_error('Android 平台不支持在文件管理器中打开', 400)
         else:
-            # Linux/Android: 打开所在目录
+            # Linux: 打开所在目录
             import subprocess
             subprocess.Popen(['xdg-open', os.path.dirname(path)])
         return _json_success()
@@ -2108,16 +2125,13 @@ async def handle_log_download(request):
             return _json_error('日志文件不存在', 404)
 
         file_size = os.path.getsize(log_path)
-        with open(log_path, 'rb') as f:
-            content = f.read()
 
         # 生成带时间戳的文件名
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'app_{timestamp}.log'
 
-        return web.Response(
-            body=content,
-            content_type='application/octet-stream',
+        return web.FileResponse(
+            log_path,
             headers={
                 'Content-Disposition': f'attachment; filename="{filename}"',
                 'Content-Length': str(file_size),
