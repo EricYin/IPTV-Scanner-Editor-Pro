@@ -78,7 +78,8 @@ class LogManager(Singleton):
             file_handler.setFormatter(formatter)
             self.logger.addHandler(file_handler)
         except Exception as e:
-            print(f"配置日志记录器失败: {e}")
+            self.logger = logging.getLogger('IPTVScanner')
+            logging.getLogger('iptv').error(f"配置日志记录器失败: {e}")
 
     def debug(self, message: str):
         self.logger.debug(message)

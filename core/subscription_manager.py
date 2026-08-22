@@ -335,11 +335,13 @@ class SubscriptionManager(Singleton):
             if status_callback:
                 status_callback(f"EPG源更新完成: {total_channels} 个频道, {total_programs} 个节目")
             
-            self._save_epg_cache(self._epg_data)
+            with self._epg_lock:
+                epg_snapshot = dict(self._epg_data)
+            self._save_epg_cache(epg_snapshot)
             self._notify_update_callbacks()
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"EPG源增量重载异常: {source.get('name', '')} - {str(e)}")
             return False
@@ -385,7 +387,9 @@ class SubscriptionManager(Singleton):
                 if status_callback:
                     status_callback(f"EPG数据加载成功: {total_channels} 个频道")
 
-                self._save_epg_cache(self._epg_data)
+                with self._epg_lock:
+                    epg_snapshot = dict(self._epg_data)
+                self._save_epg_cache(epg_snapshot)
                 if new_channels > 0:
                     self._notify_update_callbacks()
 
@@ -415,6 +419,7 @@ class SubscriptionManager(Singleton):
             return {}
         
         import requests
+        from utils.http_session import get as _http_get
 
         try:
             headers = {
@@ -423,7 +428,7 @@ class SubscriptionManager(Singleton):
             }
             
             logger.info(f"正在下载EPG数据: {epg_url}")
-            response = requests.get(epg_url, timeout=30, headers=headers, allow_redirects=True)
+            response = _http_get(epg_url, timeout=30, headers=headers, allow_redirects=True)
             response.raise_for_status()
             
             content = response.content
@@ -705,17 +710,27 @@ class SubscriptionManager(Singleton):
             data: EPG数据字典
         """
         import json
-        
+        import tempfile
+
         cache_dir = self._get_cache_dir()
-        
+
         cache_file = os.path.join(cache_dir, 'epg_cache.json')
         try:
             cache_payload = {
                 'epg_data': data,
-                'channel_names': self._epg_channel_names,
+                'channel_names': dict(self._epg_channel_names),
             }
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_payload, f, ensure_ascii=False, separators=(',', ':'))
+            fd, tmp_path = tempfile.mkstemp(dir=cache_dir, suffix='.tmp', prefix='epg_')
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    json.dump(cache_payload, f, ensure_ascii=False, separators=(',', ':'))
+                os.replace(tmp_path, cache_file)
+            except Exception:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+                raise
             logger.info(f"EPG数据已保存到缓存: {cache_file}")
         except Exception as e:
             logger.error(f"保存EPG缓存失败: {e}")
@@ -779,11 +794,13 @@ class SubscriptionManager(Singleton):
                 logger.debug(f"EPG缓存文件已过期: {age_seconds/60:.0f} 分钟前 (配置间隔: {update_interval} 分钟)")
                 return False
 
-            if self._epg_data:
+            with self._epg_lock:
+                epg_snapshot = dict(self._epg_data)
+            if epg_snapshot:
                 from datetime import date as date_type
                 today = date_type.today()
                 has_today = False
-                for programs in self._epg_data.values():
+                for programs in epg_snapshot.values():
                     if programs and isinstance(programs, list):
                         for prog in programs[:3]:
                             start_str = prog.get('start', '')
@@ -798,7 +815,7 @@ class SubscriptionManager(Singleton):
                         if has_today:
                             break
                 if not has_today:
-                    logger.info(f"EPG缓存文件未过期但无今天的节目数据，需要刷新")
+                    logger.info("EPG缓存文件未过期但无今天的节目数据，需要刷新")
                     return False
 
             return True

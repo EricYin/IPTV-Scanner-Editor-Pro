@@ -32,6 +32,8 @@ class ConfigManager(Singleton):
         self._resume_cache: dict | None = None
         self._bookmark_file = os.path.join(config_dir, 'bookmarks.json')
         self._bookmark_cache: dict | None = None
+        self._save_timer: threading.Timer | None = None
+        self._save_timer_lock = threading.Lock()
         self.load_config()
         self._initialized = True
 
@@ -213,7 +215,31 @@ class ConfigManager(Singleton):
                 logger.warning(f"配置管理-自动创建配置文件失败: {e}")
                 return False
 
-    def save_config(self):
+    def save_config(self, immediate: bool = False):
+        if immediate:
+            self._cancel_save_timer()
+            return self._do_save_config()
+        with self._save_timer_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+            self._save_timer = threading.Timer(0.5, self._do_save_config)
+            self._save_timer.daemon = True
+            self._save_timer.start()
+        return True
+
+    def _cancel_save_timer(self):
+        with self._save_timer_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+                self._save_timer = None
+
+    def flush(self):
+        self._cancel_save_timer()
+        return self._do_save_config()
+
+    def _do_save_config(self):
+        with self._save_timer_lock:
+            self._save_timer = None
         with self._lock:
             try:
                 config_dir = os.path.dirname(self.config_file)
@@ -1184,11 +1210,13 @@ class ConfigManager(Singleton):
         """加载字幕样式，缺失项写回默认值"""
         result = {}
         need_save = False
+        missing_keys = {}
         for key, default in self.SUBTITLE_STYLE_DEFAULTS.items():
             raw = self.get_value('SubtitleStyle', key)
             if raw is None:
                 result[key] = default
                 need_save = True
+                missing_keys[key] = str(default)
             elif isinstance(default, bool):
                 result[key] = self._parse_bool(raw)
             elif isinstance(default, float):
@@ -1203,6 +1231,12 @@ class ConfigManager(Singleton):
                     result[key] = default
             else:
                 result[key] = raw
+        if missing_keys:
+            with self._lock:
+                if not self.config.has_section('SubtitleStyle'):
+                    self.config.add_section('SubtitleStyle')
+                for key, value in missing_keys.items():
+                    self.config.set('SubtitleStyle', key, value)
         if need_save:
             self.save_config()
         return result
@@ -1249,11 +1283,13 @@ class ConfigManager(Singleton):
         """加载视频图像参数，缺失项写回默认值"""
         result = {}
         need_save = False
+        missing_keys = {}
         for key, default in self.VIDEO_EQ_DEFAULTS.items():
             raw = self.get_value('VideoEQ', key)
             if raw is None:
                 result[key] = default
                 need_save = True
+                missing_keys[key] = str(default)
             elif isinstance(default, bool):
                 result[key] = self._parse_bool(raw)
             elif isinstance(default, float):
@@ -1268,6 +1304,12 @@ class ConfigManager(Singleton):
                     result[key] = default
             else:
                 result[key] = raw
+        if missing_keys:
+            with self._lock:
+                if not self.config.has_section('VideoEQ'):
+                    self.config.add_section('VideoEQ')
+                for key, value in missing_keys.items():
+                    self.config.set('VideoEQ', key, value)
         if need_save:
             self.save_config()
         return result
@@ -1315,11 +1357,19 @@ class ConfigManager(Singleton):
         """加载音频参数，缺失项写回默认值"""
         result = {}
         need_save = False
+        missing_keys = {}
         for key, default in self.AUDIO_EQ_DEFAULTS.items():
             raw = self.get_value('AudioEQ', key)
             if raw is None:
                 result[key] = default
                 need_save = True
+                if key == 'eq':
+                    missing_keys[key] = ','.join(f"{float(v):.1f}" for v in default)
+                elif key == 'channel_volumes':
+                    import json as _json
+                    missing_keys[key] = _json.dumps(default)
+                else:
+                    missing_keys[key] = str(default)
             elif key == 'eq':
                 # 列表类型，存储为逗号分隔字符串
                 try:
@@ -1370,6 +1420,12 @@ class ConfigManager(Singleton):
                     result[key] = default
             else:
                 result[key] = raw
+        if missing_keys:
+            with self._lock:
+                if not self.config.has_section('AudioEQ'):
+                    self.config.add_section('AudioEQ')
+                for key, value in missing_keys.items():
+                    self.config.set('AudioEQ', key, value)
         if need_save:
             self.save_config()
         return result

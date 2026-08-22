@@ -5,8 +5,7 @@ import json
 import hashlib
 import time
 import threading
-from typing import Dict, List, Optional
-import functools
+from typing import Dict, List
 
 from core.log_manager import global_logger as logger
 from core.config_manager import ConfigManager
@@ -39,6 +38,7 @@ def get_app_data_dir() -> str:
 # 尝试导入requests，如果失败则提供备用方案
 try:
     import requests
+    from utils.http_session import get as _http_get, head as _http_head
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
@@ -167,11 +167,11 @@ def load_remote_mappings() -> Dict[str, dict]:
         # 简化版本：只尝试一次，不重试
         try:
             # 先尝试CSV格式
-            response = requests.get(remote_url, timeout=5)
+            response = _http_get(remote_url, timeout=5)
             if response.status_code == 404:
                 txt_url = remote_url.replace('.csv', '.txt')
                 logger.info(f"CSV映射文件不存在，尝试TXT格式: {txt_url}")
-                response = requests.get(txt_url, timeout=5)
+                response = _http_get(txt_url, timeout=5)
 
             response.raise_for_status()
 
@@ -206,6 +206,7 @@ class ChannelMappingManager:
         self.cache_lock = threading.Lock()
         self.user_mappings_lock = threading.Lock()
         self.fingerprint_lock = threading.Lock()
+        self._mapping_lock = threading.RLock()
         self._fingerprint_dirty = False
         self._fingerprint_save_timer = None
 
@@ -351,85 +352,94 @@ class ChannelMappingManager:
 
     def add_user_mapping(self, raw_name: str, standard_name: str, logo_url: str | None = None, group_name: str | None = None):
         """添加用户自定义映射"""
-        unique_key = f"{standard_name}||{raw_name}"
-        if unique_key not in self.user_mappings:
-            self.user_mappings[unique_key] = {
-                'standard_name': standard_name,
-                'raw_names': [raw_name],
-                'logo_url': logo_url,
-                'group_name': group_name
-            }
-        else:
-            if raw_name not in self.user_mappings[unique_key]['raw_names']:
-                self.user_mappings[unique_key]['raw_names'].append(raw_name)
+        with self._mapping_lock:
+            unique_key = f"{standard_name}||{raw_name}"
+            if unique_key not in self.user_mappings:
+                self.user_mappings[unique_key] = {
+                    'standard_name': standard_name,
+                    'raw_names': [raw_name],
+                    'logo_url': logo_url,
+                    'group_name': group_name
+                }
+            else:
+                if raw_name not in self.user_mappings[unique_key]['raw_names']:
+                    self.user_mappings[unique_key]['raw_names'].append(raw_name)
 
-        # 更新组合映射和反向映射
-        self.combined_mappings = self._combine_mappings()
-        self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
+            # 更新组合映射和反向映射
+            self.combined_mappings = self._combine_mappings()
+            self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
+            self._normalized_index = self._build_normalized_index()
 
-        # 保存用户映射
-        self._save_user_mappings()
+            # 保存用户映射
+            self._save_user_mappings()
 
-        self.logger.info(f"添加用户映射: {raw_name} -> {standard_name}")
+            self.logger.info(f"添加用户映射: {raw_name} -> {standard_name}")
 
     def remove_user_mapping(self, standard_name: str):
         """移除用户自定义映射（整个 standard_name 下所有 raw_name）"""
-        keys_to_remove = [k for k in self.user_mappings if k.split('||')[0] == standard_name or k == standard_name]
-        for key in keys_to_remove:
-            del self.user_mappings[key]
-        if keys_to_remove:
-            self.combined_mappings = self._combine_mappings()
-            self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
-            self._save_user_mappings()
-            self.logger.info(f"移除用户映射: {standard_name}")
+        with self._mapping_lock:
+            keys_to_remove = [k for k in self.user_mappings if k.split('||')[0] == standard_name or k == standard_name]
+            for key in keys_to_remove:
+                del self.user_mappings[key]
+            if keys_to_remove:
+                self.combined_mappings = self._combine_mappings()
+                self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
+                self._normalized_index = self._build_normalized_index()
+                self._save_user_mappings()
+                self.logger.info(f"移除用户映射: {standard_name}")
 
     def remove_user_mapping_entry(self, standard_name: str, raw_name: str):
         """移除用户自定义映射中的单条 raw_name"""
-        unique_key = f"{standard_name}||{raw_name}"
-        if unique_key in self.user_mappings:
-            del self.user_mappings[unique_key]
-            self.combined_mappings = self._combine_mappings()
-            self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
-            self._save_user_mappings()
-            self.logger.info(f"移除用户映射条目: {raw_name} -> {standard_name}")
-        elif standard_name in self.user_mappings:
-            raw_names = self.user_mappings[standard_name].get('raw_names', [])
-            if raw_name in raw_names:
-                raw_names.remove(raw_name)
-                if not raw_names:
-                    del self.user_mappings[standard_name]
-            self.combined_mappings = self._combine_mappings()
-            self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
-            self._save_user_mappings()
-            self.logger.info(f"移除用户映射条目: {raw_name} -> {standard_name}")
+        with self._mapping_lock:
+            unique_key = f"{standard_name}||{raw_name}"
+            if unique_key in self.user_mappings:
+                del self.user_mappings[unique_key]
+                self.combined_mappings = self._combine_mappings()
+                self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
+                self._normalized_index = self._build_normalized_index()
+                self._save_user_mappings()
+                self.logger.info(f"移除用户映射条目: {raw_name} -> {standard_name}")
+            elif standard_name in self.user_mappings:
+                raw_names = self.user_mappings[standard_name].get('raw_names', [])
+                if raw_name in raw_names:
+                    raw_names.remove(raw_name)
+                    if not raw_names:
+                        del self.user_mappings[standard_name]
+                self.combined_mappings = self._combine_mappings()
+                self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
+                self._normalized_index = self._build_normalized_index()
+                self._save_user_mappings()
+                self.logger.info(f"移除用户映射条目: {raw_name} -> {standard_name}")
 
     def import_user_mappings(self, mappings: Dict[str, dict]):
         """批量导入用户自定义映射"""
-        for key, data in mappings.items():
-            standard_name = key.split('||')[0] if '||' in key else key
-            raw_names = data.get('raw_names', [])
-            if not raw_names:
-                continue
-            for raw_name in raw_names:
-                unique_key = f"{standard_name}||{raw_name}"
-                if unique_key not in self.user_mappings:
-                    self.user_mappings[unique_key] = {
-                        'standard_name': standard_name,
-                        'raw_names': [raw_name],
-                        'logo_url': data.get('logo_url'),
-                        'group_name': data.get('group_name')
-                    }
-                else:
-                    if raw_name not in self.user_mappings[unique_key]['raw_names']:
-                        self.user_mappings[unique_key]['raw_names'].append(raw_name)
-                    if data.get('logo_url'):
-                        self.user_mappings[unique_key]['logo_url'] = data['logo_url']
-                    if data.get('group_name'):
-                        self.user_mappings[unique_key]['group_name'] = data['group_name']
-        self.combined_mappings = self._combine_mappings()
-        self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
-        self._save_user_mappings()
-        self.logger.info(f"批量导入用户映射: {len(mappings)} 条")
+        with self._mapping_lock:
+            for key, data in mappings.items():
+                standard_name = key.split('||')[0] if '||' in key else key
+                raw_names = data.get('raw_names', [])
+                if not raw_names:
+                    continue
+                for raw_name in raw_names:
+                    unique_key = f"{standard_name}||{raw_name}"
+                    if unique_key not in self.user_mappings:
+                        self.user_mappings[unique_key] = {
+                            'standard_name': standard_name,
+                            'raw_names': [raw_name],
+                            'logo_url': data.get('logo_url'),
+                            'group_name': data.get('group_name')
+                        }
+                    else:
+                        if raw_name not in self.user_mappings[unique_key]['raw_names']:
+                            self.user_mappings[unique_key]['raw_names'].append(raw_name)
+                        if data.get('logo_url'):
+                            self.user_mappings[unique_key]['logo_url'] = data['logo_url']
+                        if data.get('group_name'):
+                            self.user_mappings[unique_key]['group_name'] = data['group_name']
+            self.combined_mappings = self._combine_mappings()
+            self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
+            self._normalized_index = self._build_normalized_index()
+            self._save_user_mappings()
+            self.logger.info(f"批量导入用户映射: {len(mappings)} 条")
 
     def create_channel_fingerprint(self, url: str, channel_info: dict) -> str:
         """创建频道指纹"""
@@ -694,7 +704,7 @@ class ChannelMappingManager:
                 logger.debug(f"获取远程映射URL失败: {e}")
 
             try:
-                head_resp = requests.head(remote_url, timeout=5, allow_redirects=True)
+                head_resp = _http_head(remote_url, timeout=5, allow_redirects=True)
                 remote_etag = ''
                 if head_resp.status_code == 200:
                     remote_etag = head_resp.headers.get('ETag', '')
@@ -712,26 +722,26 @@ class ChannelMappingManager:
                     if not remote_etag and not remote_last_modified:
                         pass
                 else:
-                    get_resp = requests.get(remote_url, timeout=5, stream=True)
-                    if get_resp.status_code == 200:
-                        content_hash = hashlib.md5(get_resp.content).hexdigest()
-                        hash_file = self.cache_file + '.hash'
-                        local_hash = ''
-                        if os.path.exists(hash_file):
-                            with open(hash_file, 'r') as f:
-                                local_hash = f.read().strip()
-                        if local_hash and content_hash != local_hash:
-                            result['has_update'] = True
-                        result['remote_count'] = len(_parse_mappings_content(
-                            get_resp.text, remote_url))
-                        if not local_hash:
-                            with open(hash_file, 'w') as f:
-                                f.write(content_hash)
-                        if remote_etag:
-                            etag_file = self.cache_file + '.etag'
-                            with open(etag_file, 'w') as f:
-                                f.write(remote_etag)
-                        return result
+                    with _http_get(remote_url, timeout=5, stream=True) as get_resp:
+                        if get_resp.status_code == 200:
+                            content_hash = hashlib.md5(get_resp.content).hexdigest()
+                            hash_file = self.cache_file + '.hash'
+                            local_hash = ''
+                            if os.path.exists(hash_file):
+                                with open(hash_file, 'r') as f:
+                                    local_hash = f.read().strip()
+                            if local_hash and content_hash != local_hash:
+                                result['has_update'] = True
+                            result['remote_count'] = len(_parse_mappings_content(
+                                get_resp.text, remote_url))
+                            if not local_hash:
+                                with open(hash_file, 'w') as f:
+                                    f.write(content_hash)
+                            if remote_etag:
+                                etag_file = self.cache_file + '.etag'
+                                with open(etag_file, 'w') as f:
+                                    f.write(remote_etag)
+                            return result
             except requests.exceptions.RequestException as e:
                 result['error'] = str(e)
 
@@ -743,8 +753,10 @@ class ChannelMappingManager:
     def refresh_cache(self):
         """刷新远程映射缓存"""
         self.remote_mappings = self._load_and_cache_remote_mappings()
-        self.combined_mappings = self._combine_mappings()
-        self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
+        with self._mapping_lock:
+            self.combined_mappings = self._combine_mappings()
+            self.reverse_mappings = create_reverse_mappings(self.combined_mappings)
+            self._normalized_index = self._build_normalized_index()
         try:
             if REQUESTS_AVAILABLE:
                 remote_url = DEFAULT_REMOTE_URL
@@ -754,7 +766,7 @@ class ChannelMappingManager:
                 except Exception:
                     pass
                 try:
-                    head_resp = requests.head(remote_url, timeout=5)
+                    head_resp = _http_head(remote_url, timeout=5)
                     if head_resp.status_code == 200 and head_resp.headers.get('ETag'):
                         etag_file = self.cache_file + '.etag'
                         with open(etag_file, 'w') as f:
@@ -777,22 +789,30 @@ class MappingManagerProxy:
     def __init__(self):
         self._manager = None
         self._bg_refresh_done = False
+        self._init_lock = threading.Lock()
 
     def _get_manager(self):
         if self._manager is None:
-            self._manager = ChannelMappingManager()
-            if not self._bg_refresh_done:
-                self._bg_refresh_done = True
-                self._start_background_refresh()
+            with self._init_lock:
+                if self._manager is None:
+                    self._manager = ChannelMappingManager()
+                    if not self._bg_refresh_done:
+                        self._bg_refresh_done = True
+                        self._start_background_refresh()
         return self._manager
 
     def _start_background_refresh(self):
         def _do_refresh():
             try:
-                self._manager.remote_mappings = self._manager._load_and_cache_remote_mappings()
-                self._manager.combined_mappings = self._manager._combine_mappings()
-                self._manager.reverse_mappings = create_reverse_mappings(self._manager.combined_mappings)
-                self._manager._normalized_index = self._manager._build_normalized_index()
+                new_remote = self._manager._load_and_cache_remote_mappings()
+                new_combined = self._manager._combine_mappings()
+                new_reverse = create_reverse_mappings(new_combined)
+                new_index = self._manager._build_normalized_index()
+                with self._manager._mapping_lock:
+                    self._manager.remote_mappings = new_remote
+                    self._manager.combined_mappings = new_combined
+                    self._manager.reverse_mappings = new_reverse
+                    self._manager._normalized_index = new_index
                 self._manager.logger.info("后台刷新远程映射完成")
             except Exception as e:
                 self._manager.logger.warning(f"后台刷新远程映射失败: {e}")

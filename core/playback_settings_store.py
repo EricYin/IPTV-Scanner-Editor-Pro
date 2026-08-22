@@ -29,9 +29,20 @@ class PlaybackSettingsStore:
 
     def _save(self):
         try:
-            os.makedirs(os.path.dirname(self._file), exist_ok=True)
-            with open(self._file, 'w', encoding='utf-8') as f:
-                json.dump(self._cache, f, ensure_ascii=False, indent=1)
+            import tempfile
+            config_dir = os.path.dirname(self._file)
+            os.makedirs(config_dir, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(dir=config_dir, suffix='.tmp', prefix='pb_')
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    json.dump(self._cache, f, ensure_ascii=False, indent=1)
+                os.replace(tmp_path, self._file)
+            except Exception:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+                raise
         except Exception as e:
             logger.warning(f"保存播放设置失败: {e}")
 
