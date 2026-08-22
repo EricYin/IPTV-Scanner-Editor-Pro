@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# Android signing keys (NEVER commit)
+*.keystore
+*.jks
+android/app/release.keystore
+
 # Distribution / packaging
 .Python
 build/
@@ -216,7 +221,7 @@ channels_cache.json
 编译助手.bat
 一键编译-无vlc+ffprobe.bat
 一键编译.bat
-pyproject.toml
+
 pyi_rth_vlc.py
 
 
