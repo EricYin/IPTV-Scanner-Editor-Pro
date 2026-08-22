@@ -354,7 +354,7 @@ adb install -g app/build/outputs/apk/release/app-release.apk
 
 ### 方式一：直接运行（推荐）
 ```bash
-python pyqt_player.py
+python main.py
 ```
 
 > **注意**：运行需要 `mpv/` 目录（含 `libmpv-2.dll` on Windows / `libmpv.2.dylib` on macOS / `libmpv.so.2` on Linux）和 `ffmpeg/` 目录（含 `ffprobe.exe` on Windows / `ffprobe` on macOS/Linux），这些二进制文件未纳入版本控制。请自行下载 [MPV](https://mpv.io/) 和 [FFmpeg](https://ffmpeg.org/) 并放置到对应目录。
@@ -365,7 +365,7 @@ python pyqt_player.py
 pip install -r requirements.txt
 
 # 运行
-python pyqt_player.py
+python main.py
 ```
 
 ### 系统要求

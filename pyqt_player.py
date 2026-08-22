@@ -1,31 +1,13 @@
 import sys
 import os
 
-if sys.platform == 'darwin' and getattr(sys, 'frozen', False):
-    try:
-        import certifi
-        os.environ['SSL_CERT_FILE'] = certifi.where()
-        os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
-    except ImportError:
-        _cert_path = os.path.join(os.path.dirname(sys.executable), 'resources', 'cert.pem')
-        if os.path.exists(_cert_path):
-            os.environ['SSL_CERT_FILE'] = _cert_path
-            os.environ['REQUESTS_CA_BUNDLE'] = _cert_path
-
-if sys.platform.startswith('linux') and not getattr(sys, 'platform', '') == 'android':
-    # 完整的Wayland检测：与platform_utils.is_wayland()保持一致
-    # 必须在QApplication创建前设置QT_QPA_PLATFORM=xcb，使Qt使用XWayland，
-    # 这样video_widget.winId()返回X11窗口ID，mpv的wid嵌入才能正常工作
-    session_type = os.environ.get('XDG_SESSION_TYPE', '').lower()
-    wayland_display = os.environ.get('WAYLAND_DISPLAY', '')
-    is_wayland_env = (session_type == 'wayland') or (bool(wayland_display) and session_type != 'x11')
-    if is_wayland_env and not os.environ.get('QT_QPA_PLATFORM'):
-        os.environ['QT_QPA_PLATFORM'] = 'xcb'
+from utils.early_init import setup_environment
+setup_environment()
 
 from datetime import date, datetime  # noqa: E402
 from typing import Any, Dict, List, Optional  # noqa: E402
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from core.play_state import PlayStateManager  # noqa: E402
 from core.panel_visibility import PanelVisibilityManager  # noqa: E402
 from controllers.main_window_protocol import CatchupProgram  # noqa: E402
@@ -91,7 +73,7 @@ class _RoundedContainer(QWidget):
         super().__init__(parent)
 
     def paintEvent(self, event):
-        from ui.styles import AppStyles
+
         r = AppStyles._get_style_border_radius()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -111,7 +93,7 @@ class VideoOverlayBadge(QWidget):
 
     @staticmethod
     def _get_mode_configs():
-        from ui.styles import AppStyles
+
         c = AppStyles._get_colors()
         return {
             'catchup': (c['accent'], c['accent_pressed'], 'catchup', c['window']),
@@ -142,7 +124,7 @@ class VideoOverlayBadge(QWidget):
         self.update()
 
     def _update_icon(self):
-        from ui.styles import AppStyles
+
         c = AppStyles._get_colors()
         icon_name = 'play' if self._mode == self.MODE_CATCHUP else 'backward'
         icon_color = c['window']
@@ -549,7 +531,7 @@ class IPTVPlayer(
 
         self.status_bar = None
 
-        from datetime import datetime
+
         self.current_epg_date = datetime.now().date()
         self._last_media_info = {}
         self._last_info_key = None
@@ -711,11 +693,10 @@ class IPTVPlayer(
 
         self._theme_manager.register_window(self)
 
-        from PySide6.QtWidgets import QApplication
-        app = QApplication.instance()
-        self._space_shortcut = QShortcut(' ', app)  # type: ignore[arg-type]
+
+        self._space_shortcut = QShortcut(' ', self)
         self._space_shortcut.activated.connect(self.toggle_play)
-        self._space_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        self._space_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
 
         # 标记UI初始化完成
         self._ui_initialized = True
@@ -813,9 +794,8 @@ class IPTVPlayer(
         else:
             self.video_widget = QWidget(self.video_frame)
             self.video_widget.setStyleSheet(AppStyles.player_background_style())
-            needs_native_window = (
-                (sys.platform.startswith('linux') and not getattr(sys, 'platform', '') == 'android')
-            )
+            from utils.platform_utils import is_linux
+            needs_native_window = is_linux()
             if needs_native_window:
                 self.video_widget.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
                 self.video_widget.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors, True)
@@ -842,6 +822,16 @@ class IPTVPlayer(
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.setStyleSheet(AppStyles.statusbar_style())
+
+        # 永久信息块
+        from PySide6.QtWidgets import QLabel
+        self._status_channel_label = QLabel("")
+        self._status_time_label = QLabel("")
+        self._status_channel_label.setStyleSheet("color: palette(text); padding: 0 8px;")
+        self._status_time_label.setStyleSheet("color: palette(text); padding: 0 8px;")
+        self.status_bar.addPermanentWidget(self._status_channel_label)
+        self.status_bar.addPermanentWidget(self._status_time_label)
+
         self.status_bar_show_message(self.language_manager.tr("ready", "Ready"))
 
         logger.debug("_create_status_bar: 完成")
@@ -971,9 +961,8 @@ class IPTVPlayer(
         """创建定时器"""
         logger.debug("_create_timer: 开始")
 
-        # 创建定时器，定期更新悬浮窗信息
-        from PySide6.QtCore import QTimer
-        self.update_timer = QTimer()
+
+        self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.update_floating_panel_info)
         self.player_controller.playback_position_updated.connect(self._on_playback_position_updated)
 
@@ -996,8 +985,7 @@ class IPTVPlayer(
         if self.video_placeholder:
             self.video_placeholder.installEventFilter(self)
 
-        # 安装 QApplication 级别事件过滤器（用于全局快捷键）
-        from PySide6.QtWidgets import QApplication
+
         app = QApplication.instance()
         if app:
             app.installEventFilter(self)
@@ -1072,6 +1060,13 @@ class IPTVPlayer(
         """更新状态栏消息"""
         if self.status_bar:
             self.status_bar.showMessage(message)
+
+    def update_status_bar_permanent(self, channel=None, time_info=None):
+        """更新状态栏永久信息块"""
+        if hasattr(self, '_status_channel_label') and channel is not None:
+            self._status_channel_label.setText(channel)
+        if hasattr(self, '_status_time_label') and time_info is not None:
+            self._status_time_label.setText(time_info)
 
     def setup_menu_bar(self, skip_recent_files=False):
         self.ui_ctrl.setup_menu_bar(skip_recent_files)

@@ -1,9 +1,29 @@
 import sys
 import os
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# PySide6 未安装时注入 mock，使测试可收集和运行
+if 'PySide6' not in sys.modules:
+    try:
+        import PySide6  # noqa: F401
+    except ImportError:
+        _mock_qt = MagicMock()
+        _mock_qt.QtCore = MagicMock()
+        _mock_qt.QtCore.Qt = MagicMock()
+        _mock_qt.QtCore.QThread = MagicMock()
+        _mock_qt.QtCore.QTimer = MagicMock()
+        _mock_qt.QtCore.Signal = lambda *a, **k: MagicMock()
+        _mock_qt.QtCore.Slot = lambda *a, **k: (lambda f: f)
+        _mock_qt.QtCore.QObject = MagicMock()
+        _mock_qt.QtWidgets = MagicMock()
+        _mock_qt.QtGui = MagicMock()
+        sys.modules['PySide6'] = _mock_qt
+        sys.modules['PySide6.QtCore'] = _mock_qt.QtCore
+        sys.modules['PySide6.QtWidgets'] = _mock_qt.QtWidgets
+        sys.modules['PySide6.QtGui'] = _mock_qt.QtGui
 
 
 class MockMainWindow:

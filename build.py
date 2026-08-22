@@ -10,14 +10,24 @@ import sys
 import shutil
 import plistlib
 import subprocess
-import urllib.request
+import hashlib
 from pathlib import Path
 
 
-def _download(url, dest):
+def _download(url, dest, expected_sha256=None):
     print(f"下载: {url}")
     print(f"保存到: {dest}")
     urllib.request.urlretrieve(url, dest)
+    actual_hash = hashlib.sha256(Path(dest).read_bytes()).hexdigest()
+    print(f"SHA256: {actual_hash}")
+    if expected_sha256:
+        if actual_hash.lower() != expected_sha256.lower():
+            print(f"错误: SHA256 校验失败！期望: {expected_sha256[:16]}... 实际: {actual_hash[:16]}...")
+            Path(dest).unlink(missing_ok=True)
+            sys.exit(1)
+        print("SHA256 校验通过")
+    else:
+        print("警告: 未提供预期 SHA256，跳过校验。建议首次下载后记录上述哈希值并填入代码。")
     print(f"下载完成: {dest}")
 
 
@@ -42,8 +52,8 @@ except ImportError:
 
 IS_WINDOWS = sys.platform == 'win32'
 IS_MACOS = sys.platform == 'darwin'
-IS_LINUX = sys.platform.startswith('linux') and not getattr(sys, 'platform', '') == 'android'
-IS_ANDROID = getattr(sys, 'platform', '') == 'android' or 'ANDROID_ARGUMENT' in os.environ
+IS_ANDROID = getattr(sys, 'platform', '') == 'android' or 'ANDROID_ARGUMENT' in os.environ or 'ANDROID_ROOT' in os.environ
+IS_LINUX = sys.platform.startswith('linux') and not IS_ANDROID
 
 APP_NAME = "ISEP"
 BUNDLE_ID = "com.iptv-scanner-editor-pro.app"
@@ -597,8 +607,8 @@ def post_process_macos_app():
         'CFBundleName': APP_NAME,
         'CFBundleDisplayName': APP_NAME,
         'CFBundleIdentifier': BUNDLE_ID,
-        'CFBundleVersion': '47.1.0',
-        'CFBundleShortVersionString': '47.1.0',
+        'CFBundleVersion': __import__('core.version', fromlist=['CURRENT_VERSION']).CURRENT_VERSION,
+        'CFBundleShortVersionString': __import__('core.version', fromlist=['CURRENT_VERSION']).CURRENT_VERSION,
         'CFBundlePackageType': 'APPL',
         'CFBundleInfoDictionaryVersion': '6.0',
         'LSMinimumSystemVersion': '10.15',
@@ -742,7 +752,7 @@ def clean_build():
     if dist_dir.exists():
         print(f"移除发布目录: {dist_dir}")
         shutil.rmtree(dist_dir)
-    spec_file = PROJECT_ROOT / "pyqt_player.spec"
+    spec_file = PROJECT_ROOT / f"{APP_NAME}.spec"
     if spec_file.exists():
         print(f"移除 spec 文件: {spec_file}")
         spec_file.unlink()
@@ -764,7 +774,7 @@ def run_build():
 
     try:
         import subprocess
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=True, text=True)
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=300)
 
         print(f"返回码: {result.returncode}")
 

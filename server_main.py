@@ -32,8 +32,8 @@ def _setup_android_env():
         config_dir = get_android_data_dir() or os.path.join(files_dir, 'ISEP')
         os.makedirs(config_dir, exist_ok=True)
         os.chdir(config_dir)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger('server_main').warning(f'_setup_android_env 失败: {e}')
 
 
 logging.basicConfig(
