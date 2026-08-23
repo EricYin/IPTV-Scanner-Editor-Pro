@@ -232,7 +232,30 @@ class MultiScreenCell(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self._index)
+        elif event.button() == Qt.MouseButton.RightButton and self._is_playing:
+            self._show_context_menu(event.globalPosition().toPoint())
         super().mousePressEvent(event)
+
+    def _show_context_menu(self, global_pos):
+        from PySide6.QtWidgets import QMenu
+        from ui.styles import AppStyles
+        menu = QMenu(self)
+        menu.setStyleSheet(AppStyles.player_menu_bar_style())
+        tr = self.window().language_manager.tr if self.window() else (lambda k, d='': d)
+
+        menu.addAction(tr('ctx_close_cell', '关闭此单元格'), lambda: self.close_requested.emit(self._index))
+        menu.addSeparator()
+        mute_action = menu.addAction(tr('ctx_mute', '静音/取消静音'))
+        mute_action.triggered.connect(lambda: self._mute_button.click() if hasattr(self, '_mute_button') else None)
+        menu.addAction(tr('ctx_screenshot', '截图'), lambda: self._take_screenshot())
+        menu.exec(global_pos)
+
+    def _take_screenshot(self):
+        if self._player:
+            try:
+                self._player.screenshot()
+            except Exception:
+                pass
 
     def dragEnterEvent(self, event):
         if self._accepting_drop and event.mimeData().hasFormat('application/x-channel'):

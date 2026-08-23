@@ -97,7 +97,7 @@ class EpgMixin:
 
         # 跳转到此节目所在频道
         if ch_name and self.current_channel:
-            goto_ch_action = QAction(tr('epg_goto_channel', '定位到当前频道'), menu)
+            goto_ch_action = QAction(tr('epg_goto_channel', '定位到正在播放的频道'), menu)
             goto_ch_action.triggered.connect(lambda: self._epg_goto_current_channel())
             menu.addAction(goto_ch_action)
 

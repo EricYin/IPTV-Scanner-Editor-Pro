@@ -162,6 +162,7 @@ class MediaController:
 
         menu.addAction(tr("ctx_open_stream", "Open Stream\tCtrl+U"), lambda *a: self.window._open_stream())
         menu.addAction(tr("ctx_open_video", "Open Video\tCtrl+Shift+O"), lambda *a: self.window._open_video_file())
+        menu.addSeparator()
         menu.addAction(tr("ctx_scan", "Scan & Organize"), lambda *a: self.window.open_scan_ui())
 
 
