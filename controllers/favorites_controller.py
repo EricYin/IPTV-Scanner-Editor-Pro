@@ -596,7 +596,7 @@ class FavoritesController:
     def _add_to_favorites_from_channel(self, channel):
         """从频道信息加入收藏"""
         if self._service:
-            self._service.add_favorite(channel)
+            self._service.add_to_favorites(channel)
             self.populate_favorites_tab()
             tr = self.window.language_manager.tr
             self.window.status_bar_show_message(tr('added_to_favorites', '已加入收藏'))

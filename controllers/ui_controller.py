@@ -1275,17 +1275,17 @@ class UIController:
             play_pause.triggered.connect(lambda: self.window.playback_ctrl.toggle_play() if hasattr(self.window, 'playback_ctrl') else None)
             playback_menu.addAction(play_pause)
 
-            stop_play = QAction(tr("menu_stop", "Stop\tEsc"), self.window)
+            stop_play = QAction(tr("menu_stop", "Stop"), self.window)
             stop_play.triggered.connect(lambda: self.window.playback_ctrl.stop_playback() if hasattr(self.window, 'playback_ctrl') else None)
             playback_menu.addAction(stop_play)
 
             playback_menu.addSeparator()
 
-            prev_channel = QAction(tr("menu_prev_channel", "Previous Channel\t↑"), self.window)
+            prev_channel = QAction(tr("menu_prev_channel", "Previous Channel\tUp"), self.window)
             prev_channel.triggered.connect(lambda: self.window.event_handler._switch_channel(-1) if hasattr(self.window, 'event_handler') else None)
             playback_menu.addAction(prev_channel)
 
-            next_channel = QAction(tr("menu_next_channel", "Next Channel\t↓"), self.window)
+            next_channel = QAction(tr("menu_next_channel", "Next Channel\tDown"), self.window)
             next_channel.triggered.connect(lambda: self.window.event_handler._switch_channel(1) if hasattr(self.window, 'event_handler') else None)
             playback_menu.addAction(next_channel)
 
@@ -1297,18 +1297,18 @@ class UIController:
 
             # ---- 进退/音量/倍速 子菜单 ----
             seek_menu = playback_menu.addMenu(tr("menu_seek", "Seek"))
-            seek_back = QAction(tr("menu_seek_back", "Seek Back\t←"), self.window)
+            seek_back = QAction(tr("menu_seek_back", "Seek Back\tLeft"), self.window)
             seek_back.triggered.connect(lambda: self.window.event_handler._seek_relative(-10) if hasattr(self.window, 'event_handler') else None)
             seek_menu.addAction(seek_back)
-            seek_forward = QAction(tr("menu_seek_forward", "Seek Forward\t→"), self.window)
+            seek_forward = QAction(tr("menu_seek_forward", "Seek Forward\tRight"), self.window)
             seek_forward.triggered.connect(lambda: self.window.event_handler._seek_relative(10) if hasattr(self.window, 'event_handler') else None)
             seek_menu.addAction(seek_forward)
 
             vol_menu = playback_menu.addMenu(tr("menu_volume", "Volume"))
-            vol_up = QAction(tr("menu_vol_up", "Volume Up\tScroll Up"), self.window)
+            vol_up = QAction(tr("menu_vol_up", "Volume Up"), self.window)
             vol_up.triggered.connect(lambda: self.window.event_handler._adjust_volume(5) if hasattr(self.window, 'event_handler') else None)
             vol_menu.addAction(vol_up)
-            vol_down = QAction(tr("menu_vol_down", "Volume Down\tScroll Down"), self.window)
+            vol_down = QAction(tr("menu_vol_down", "Volume Down"), self.window)
             vol_down.triggered.connect(lambda: self.window.event_handler._adjust_volume(-5) if hasattr(self.window, 'event_handler') else None)
             vol_menu.addAction(vol_down)
             mute_action = QAction(tr("menu_mute", "Mute\tCtrl+M"), self.window)
@@ -1644,10 +1644,6 @@ class UIController:
             except Exception:
                 pass
 
-        search_shortcut = QShortcut(QKeySequence("Ctrl+Shift+F"), app)
-        search_shortcut.activated.connect(self._show_global_search)
-        search_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-        self.window._global_search_shortcut = search_shortcut
 
 
 

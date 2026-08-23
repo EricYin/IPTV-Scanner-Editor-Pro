@@ -694,10 +694,6 @@ class IPTVPlayer(
         self._theme_manager.register_window(self)
 
 
-        self._space_shortcut = QShortcut(' ', self)
-        self._space_shortcut.activated.connect(self.toggle_play)
-        self._space_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-
         # 标记UI初始化完成
         self._ui_initialized = True
 

@@ -138,7 +138,7 @@ class EventHandler:
             return False
         elif modifiers == Qt.KeyboardModifier.ControlModifier:
             return key in (Qt.Key.Key_O, Qt.Key.Key_S, Qt.Key.Key_Q,
-                           Qt.Key.Key_U, Qt.Key.Key_M)
+                           Qt.Key.Key_U, Qt.Key.Key_M, Qt.Key.Key_J)
         elif modifiers == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
             if key == Qt.Key.Key_O:
                 return True
@@ -161,10 +161,16 @@ class EventHandler:
 
             if modifiers == Qt.KeyboardModifier.NoModifier:
                 if key == Qt.Key.Key_Space:
+                    if not self._is_main_window_focused():
+                        return False
                     if hasattr(w, 'playback_ctrl'):
                         w.playback_ctrl.toggle_play()
                     return True
                 elif key == Qt.Key.Key_Escape:
+                    from PySide6.QtWidgets import QApplication, QDialog
+                    active = QApplication.activeModalWidget()
+                    if active and isinstance(active, QDialog):
+                        return False
                     if hasattr(w, 'isFullScreen') and w.isFullScreen():
                         w.toggle_fullscreen()
                     elif hasattr(w, 'playback_ctrl'):
