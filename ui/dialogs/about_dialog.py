@@ -33,6 +33,8 @@ class AboutDialog(FloatingDialog):
 
     def closeEvent(self, event):
         self._closing = True
+        if hasattr(self, '_version_thread') and self._version_thread.is_alive():
+            self._version_thread.join(timeout=2.0)
         try:
             from ..theme_manager import get_theme_manager
             get_theme_manager().unregister_window(self)

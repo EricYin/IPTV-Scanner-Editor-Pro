@@ -235,7 +235,7 @@ class ControlPanelMixin:
         self.prev_ch_button.setIconSize(btn_icon_size)
         self.prev_ch_button.setFixedSize(self.CTRL_BUTTON_WIDTH, self.CTRL_BUTTON_HEIGHT)
         self.prev_ch_button.setStyleSheet(AppStyles.player_button_style())
-        self.prev_ch_button.clicked.connect(lambda: self.event_handler._switch_channel(-1))
+        self.prev_ch_button.clicked.connect(lambda: getattr(self, 'event_handler', None) and self.event_handler._switch_channel(-1))
         self.prev_ch_button.setToolTip(tr("panel_prev_ch", "上一频道"))
         self.control_row.addWidget(self.prev_ch_button)
 
@@ -253,7 +253,7 @@ class ControlPanelMixin:
         self.next_ch_button.setIconSize(btn_icon_size)
         self.next_ch_button.setFixedSize(self.CTRL_BUTTON_WIDTH, self.CTRL_BUTTON_HEIGHT)
         self.next_ch_button.setStyleSheet(AppStyles.player_button_style())
-        self.next_ch_button.clicked.connect(lambda: self.event_handler._switch_channel(1))
+        self.next_ch_button.clicked.connect(lambda: getattr(self, 'event_handler', None) and self.event_handler._switch_channel(1))
         self.next_ch_button.setToolTip(tr("panel_next_ch", "下一频道"))
         self.control_row.addWidget(self.next_ch_button)
 

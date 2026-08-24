@@ -440,4 +440,4 @@ class PlaylistPanelMixin:
         """本地标签分组切换"""
         self._populate_channel_list_for(self.local_channel_list, self._local_channels, group_name)
         if self.local_channel_list.viewMode() == QListWidget.ViewMode.IconMode:
-            QTimer.singleShot(200, lambda: self._capture_visible_thumbnails('local'))
+            QTimer.singleShot(200, lambda: None if (_shiboken_isvalid and not _shiboken_isvalid(self)) else self._capture_visible_thumbnails('local'))

@@ -96,6 +96,7 @@ class MultiScreenController(QObject):
 
         if self._info_timer:
             self._info_timer.stop()
+            self._info_timer.deleteLater()
             self._info_timer = None
 
         if self._widget and hasattr(w, 'video_frame'):
@@ -256,6 +257,7 @@ class MultiScreenController(QObject):
     def _start_info_timer(self):
         if self._info_timer:
             self._info_timer.stop()
+            self._info_timer.deleteLater()
         self._info_timer = QTimer(self)
         self._info_timer.timeout.connect(self._update_cells_info)
         self._info_timer.start(5000)
@@ -285,6 +287,7 @@ class MultiScreenController(QObject):
         self._stop_all_cells()
         if self._info_timer:
             self._info_timer.stop()
+            self._info_timer.deleteLater()
             self._info_timer = None
         if self._widget:
             self._widget.setParent(None)
