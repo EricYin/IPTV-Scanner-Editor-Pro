@@ -87,14 +87,13 @@ class EpgReminderController:
             )
             popup.show()
             self._active_popups.append(popup)
-            popup.destroyed.connect(lambda obj=None, p=popup: self._on_popup_destroyed(p))
+            popup.destroyed.connect(lambda obj=None, p_id=id(popup): self._on_popup_destroyed(p_id))
         except Exception as e:
             logger.debug(f"提醒弹窗显示失败: {e}")
             self._show_reminder_notification(channel_name, program_title)
 
-    def _on_popup_destroyed(self, popup):
-        if popup in self._active_popups:
-            self._active_popups.remove(popup)
+    def _on_popup_destroyed(self, popup_id):
+        self._active_popups = [p for p in self._active_popups if id(p) != popup_id]
 
     def get_active_popups(self) -> list:
         return list(self._active_popups)

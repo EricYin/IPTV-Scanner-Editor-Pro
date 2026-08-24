@@ -1674,7 +1674,8 @@ class UIController:
                 return
             if start < now and channel.get('catchup_source', ''):
                 from PySide6.QtCore import QTimer
-                QTimer.singleShot(500, lambda: w.catchup_ctrl.start_catchup(program))
+                from utils.thread_safety import safe_single_shot
+                safe_single_shot(500, w, lambda: w.catchup_ctrl.start_catchup(program))
         except Exception:
             pass
 

@@ -65,8 +65,8 @@ class GlobalSearchDialog(FloatingDialog):
     def closeEvent(self, event):
         if getattr(self, '_epg_worker', None):
             self._epg_worker.requestInterruption()
-            self._epg_worker.quit()
             self._epg_worker.wait(3000)
+            self._epg_worker.deleteLater()
             self._epg_worker = None
         try:
             from ui.theme_manager import get_theme_manager

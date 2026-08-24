@@ -354,8 +354,8 @@ class UpdateController:
         try:
             old_thread = self._check_thread
             if old_thread and old_thread.isRunning():
-                old_thread.quit()
-                old_thread.wait(1000)
+                old_thread.requestInterruption()
+                old_thread.wait(2000)
 
             self._check_thread = UpdateCheckThread()
             self._check_thread.setParent(self.window)

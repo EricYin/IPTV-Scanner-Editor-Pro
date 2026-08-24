@@ -142,12 +142,12 @@ class FileQueueController(QObject):
         # 更新 UI 选中项
         self._select_channel_in_list(next_idx)
         # 播放
-        QTimer.singleShot(100, lambda: self.window.play_channel(channel))
+        QTimer.singleShot(100, lambda: self.window and self.window.play_channel(channel))
 
     def _replay_channel(self, channel: dict):
         """重新播放同一频道"""
         try:
-            QTimer.singleShot(100, lambda: self.window.play_channel(channel))
+            QTimer.singleShot(100, lambda: self.window and self.window.play_channel(channel))
         except Exception as e:
             logger.debug(f"重新播放失败: {e}")
 
@@ -227,7 +227,7 @@ class FileQueueController(QObject):
         self._select_channel_in_list(idx)
         channel = channels[idx]
         self._notify_skip_resume(channel)
-        QTimer.singleShot(100, lambda: self.window.play_channel(channel))
+        QTimer.singleShot(100, lambda: self.window and self.window.play_channel(channel))
 
     def play_previous(self):
         """播放上一个文件"""
@@ -244,7 +244,7 @@ class FileQueueController(QObject):
         self._select_channel_in_list(idx)
         channel = channels[idx]
         self._notify_skip_resume(channel)
-        QTimer.singleShot(100, lambda: self.window.play_channel(channel))
+        QTimer.singleShot(100, lambda: self.window and self.window.play_channel(channel))
 
     # ---------- AB 循环 ----------
     def ab_loop_set_a(self) -> Optional[float]:

@@ -510,6 +510,9 @@ class EpgTimelineDialog(FloatingDialog):
                 pass
             self._load_worker.abort()
             self._load_worker.wait(3000)
+        if self._load_worker:
+            self._load_worker.deleteLater()
+            self._load_worker = None
         if hasattr(self, '_now_timer'):
             self._now_timer.stop()
         try:

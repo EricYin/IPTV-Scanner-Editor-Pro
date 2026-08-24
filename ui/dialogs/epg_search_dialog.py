@@ -91,8 +91,8 @@ class EpgSearchDialog(FloatingDialog):
     def closeEvent(self, event):
         if getattr(self, '_worker', None):
             self._worker.requestInterruption()
-            self._worker.quit()
             self._worker.wait(3000)
+            self._worker.deleteLater()
             self._worker = None
         try:
             from ui.theme_manager import get_theme_manager

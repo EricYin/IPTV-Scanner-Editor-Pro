@@ -103,6 +103,7 @@ class EpgReminderService:
     def stop_check_timer(self):
         if self._timer:
             self._timer.stop()
+            self._timer.deleteLater()
             self._timer = None
 
     def _check_reminders(self):

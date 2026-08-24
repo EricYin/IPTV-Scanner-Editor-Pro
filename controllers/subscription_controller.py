@@ -46,6 +46,7 @@ class SubscriptionController:
         """从_workers列表中移除已完成的worker"""
         if worker in self._workers:
             self._workers.remove(worker)
+        worker.deleteLater()
 
     def handle_playlist_subscription(self, need_update: bool, playlist_url: str, source_index=None):
         """在后台线程中处理列表订阅（按源索引独立判断）"""

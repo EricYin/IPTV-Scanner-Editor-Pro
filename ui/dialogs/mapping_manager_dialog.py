@@ -63,8 +63,11 @@ class MappingManagerDialog(FloatingDialog):
         for worker_attr in ('_update_check_worker', '_refresh_worker'):
             worker = getattr(self, worker_attr, None)
             if worker and worker.isRunning():
-                worker.quit()
+                worker.requestInterruption()
                 worker.wait(3000)
+            if worker:
+                worker.deleteLater()
+                setattr(self, worker_attr, None)
         try:
             from ..theme_manager import get_theme_manager
             get_theme_manager().unregister_window(self)
