@@ -7,6 +7,7 @@ from typing import Optional, List, Dict
 
 from core.config_manager import ConfigManager
 from services.m3u_parser import load_m3u_from_url_data, parse_m3u_content, extract_tvg_url_from_header
+from utils.general_utils import redact_url
 
 logger = logging.getLogger('server.context')
 
@@ -186,6 +187,7 @@ class StandaloneScanner:
                         return (u, False, f'HTTP {status_code}', latency, None)
                     except Exception as e:
                         latency = int((time.time() - t0) * 1000)
+                        logger.debug(f"扫描频道失败 {redact_url(u)}: {e}")
                         return (u, False, f'错误: {str(e)[:60]}', latency, None)
                 # RTSP：用 TCP socket 连接检查
                 if low.startswith('rtsp://'):
@@ -451,6 +453,7 @@ class StandaloneScanner:
                             pass
                         return (idx, False, f'HTTP {status_code}')
                     except Exception as e:
+                        logger.debug(f"扫描频道失败 {redact_url(url)}: {e}")
                         return (idx, False, f'错误: {str(e)[:50]}')
                 if low.startswith('rtsp://'):
                     try:
@@ -608,12 +611,12 @@ class StandaloneScanner:
                                 if not any(s.get('url') == epg_url for s in epg_sources):
                                     epg_sources.append({'url': epg_url, 'name': 'M3U 内嵌 EPG', 'enabled': True})
                                     config.save_epg_sources(epg_sources)
-                                    logger.info(f'自动添加 M3U 内嵌 EPG 源: {epg_url}')
+                                    logger.info(f'自动添加 M3U 内嵌 EPG 源: {redact_url(epg_url)}')
                         except Exception as e:
                             logger.warning(f'自动添加 EPG 源失败: {e}')
                     self.last_message = f'已加载 {src_url[:40]}: {len(channels)} 个频道'
                 except Exception as e:
-                    logger.warning(f"扫描源 {src_url} 失败: {e}")
+                    logger.warning(f"扫描源 {redact_url(src_url)} 失败: {e}")
                     with self._lock:
                         self.stats['invalid'] += 1
                     self.last_message = f'加载失败: {src_url[:40]}'
@@ -855,14 +858,14 @@ class ServerContext:
                     if resp.status_code != 200:
                         err = f'HTTP {resp.status_code}'
                         errors.append(err)
-                        logger.warning(f"加载源 {src_url} 失败: {err}")
+                        logger.warning(f"加载源 {redact_url(src_url)} 失败: {err}")
                         continue
                     content = load_m3u_from_url_data(resp.content)
                     channels, header_attrs = parse_m3u_content(content)
                     # 提取 M3U 头部 x-tvg-url 定义的 EPG 地址并自动加载
                     epg_url_from_m3u = header_attrs.get('epg_url', '') if header_attrs else ''
                     if epg_url_from_m3u:
-                        logger.info(f"M3U 源 {src_url} 包含 EPG 地址: {epg_url_from_m3u}")
+                        logger.info(f"M3U 源 {redact_url(src_url)} 包含 EPG 地址: {redact_url(epg_url_from_m3u)}")
                         try:
                             self.load_single_epg(epg_url_from_m3u)
                         except Exception as epg_e:
@@ -878,11 +881,11 @@ class ServerContext:
                     else:
                         err = 'M3U 解析为空'
                         errors.append(err)
-                        logger.warning(f"加载源 {src_url} M3U 解析为空（内容长度 {len(content)}）")
+                        logger.warning(f"加载源 {redact_url(src_url)} M3U 解析为空（内容长度 {len(content)}）")
                 except Exception as e:
                     err = str(e)[:60]
                     errors.append(err)
-                    logger.warning(f"加载源 {src_url} 异常: {e}")
+                    logger.warning(f"加载源 {redact_url(src_url)} 异常: {e}")
 
             # 更新频道列表
             # 合并策略：保留本地频道（扫描/导入，无 source 字段），

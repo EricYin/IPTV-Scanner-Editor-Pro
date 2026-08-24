@@ -1692,8 +1692,8 @@ class AudioVisualService:
                                 has_real_video = True
                         elif t.get('type') == 'audio':
                             has_audio = True
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"track-list JSON 解析失败: {e}")
             is_audio = has_audio and not has_real_video
             self._is_audio_only = is_audio
             return is_audio
@@ -1744,8 +1744,8 @@ class AudioVisualService:
             w._lyrics_widget.show()
             w._lyrics_widget.raise_()
             w._lyrics_widget.start()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"歌词自动加载失败: {e}")
 
     def _auto_hide_lyrics(self):
         try:
@@ -1809,8 +1809,8 @@ class AudioVisualService:
             config = ConfigManager()
             config.set_value('Player', 'audio_visual_style', self._current_style)
             config.save_config()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"保存音频可视化样式失败: {e}")
 
     def get_style_display_name(self, style_key, language_manager=None):
         style = AUDIO_VISUAL_STYLES.get(style_key)

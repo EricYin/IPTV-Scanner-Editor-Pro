@@ -369,7 +369,8 @@ class MpvStreamValidator:
                 result['error_type'] = 'timeout'
 
         except Exception as e:
-            result['error'] = str(e)
+            global_logger.debug(f"mpv 验证未知异常: {e}")
+            result['error'] = '内部错误'
             result['error_type'] = 'unknown_error'
         finally:
             if handle:

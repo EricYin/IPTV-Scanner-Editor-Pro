@@ -181,8 +181,8 @@ def _ensure_libmpv_loaded():
                 dll_dir = os.path.dirname(os.path.abspath(path))
                 try:
                     os.add_dll_directory(dll_dir)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"add_dll_directory 失败: {e}")
             libmpv = ctypes.CDLL(path)
 
             libmpv.mpv_create.restype = ctypes.c_void_p
@@ -594,8 +594,8 @@ def wait_for_event(handle, timeout_sec):
         event_ptr = libmpv.mpv_wait_event(handle, timeout_sec)
         if event_ptr:
             return ctypes.cast(event_ptr, ctypes.POINTER(mpv_event)).contents
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"wait_for_event 失败: {e}")
     return None
 
 
@@ -613,7 +613,8 @@ def wait_for_specific_event(handle, timeout_sec, target_events):
                     return MPV_EVENT_SHUTDOWN, 0, None
                 if event.event_id == MPV_EVENT_NONE:
                     continue
-        except Exception:
+        except Exception as e:
+            logger.debug(f"wait_for_specific_event 失败: {e}")
             break
     return 0, 0, None
 
@@ -641,8 +642,8 @@ def set_wakeup_callback(handle, callback, data):
             if len(_callback_refs) > _MAX_CALLBACK_REFS:
                 _callback_refs[:] = _callback_refs[-_MAX_CALLBACK_REFS:]
         libmpv.mpv_set_wakeup_callback(handle, callback, data)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"set_wakeup_callback 失败: {e}")
 
 
 MPV_RENDER_API_TYPE_OPENGL = b'opengl'

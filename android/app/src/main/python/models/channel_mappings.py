@@ -771,9 +771,9 @@ class ChannelMappingManager:
                         etag_file = self.cache_file + '.etag'
                         with open(etag_file, 'w') as f:
                             f.write(head_resp.headers['ETag'])
+                    head_resp.close()
                 except Exception as e:
                     logger.debug(f"保存ETag失败: {e}")
-                    pass
         except Exception as e:
             logger.debug(f"刷新频道映射失败: {e}")
         self.logger.info("远程映射缓存已刷新")

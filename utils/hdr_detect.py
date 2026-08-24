@@ -156,38 +156,32 @@ def is_macos_hdr_enabled():
 def _check_windows_hdr_registry():
     try:
         base_path = r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers"
-        h_base = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base_path)
-        i = 0
-        while True:
-            try:
-                subkey_name = winreg.EnumKey(h_base, i)
-                i += 1
-                if subkey_name.lower() != 'monitordatastore':
-                    continue
-                h_mds = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{base_path}\\{subkey_name}")
-                j = 0
-                while True:
-                    try:
-                        monitor_name = winreg.EnumKey(h_mds, j)
-                        j += 1
-                        h_mon = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{base_path}\\{subkey_name}\\{monitor_name}")
-                        try:
-                            val, val_type = winreg.QueryValueEx(h_mon, 'HDREnabled')
-                            winreg.CloseKey(h_mon)
-                            if val_type == winreg.REG_DWORD and val == 1:
-                                winreg.CloseKey(h_mds)
-                                winreg.CloseKey(h_base)
-                                logger.info(f"注册表HDR检测: 显示器 {monitor_name} HDREnabled=1")
-                                return True
-                        except OSError:
-                            pass
-                        winreg.CloseKey(h_mon)
-                    except OSError:
-                        break
-                winreg.CloseKey(h_mds)
-            except OSError:
-                break
-        winreg.CloseKey(h_base)
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base_path) as h_base:
+            i = 0
+            while True:
+                try:
+                    subkey_name = winreg.EnumKey(h_base, i)
+                    i += 1
+                    if subkey_name.lower() != 'monitordatastore':
+                        continue
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{base_path}\\{subkey_name}") as h_mds:
+                        j = 0
+                        while True:
+                            try:
+                                monitor_name = winreg.EnumKey(h_mds, j)
+                                j += 1
+                                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{base_path}\\{subkey_name}\\{monitor_name}") as h_mon:
+                                    try:
+                                        val, val_type = winreg.QueryValueEx(h_mon, 'HDREnabled')
+                                        if val_type == winreg.REG_DWORD and val == 1:
+                                            logger.info(f"注册表HDR检测: 显示器 {monitor_name} HDREnabled=1")
+                                            return True
+                                    except OSError:
+                                        pass
+                            except OSError:
+                                break
+                except OSError:
+                    break
     except Exception as e:
         logger.debug(f"注册表HDR检测失败: {e}")
     return False

@@ -207,8 +207,8 @@ class MediaController:
                     pixmap = QPixmap(filepath)
                     if not pixmap.isNull():
                         clipboard.setPixmap(pixmap)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"截图复制到剪贴板失败: {e}")
 
             from PySide6.QtCore import QTimer
             QTimer.singleShot(500, _copy_to_clipboard)

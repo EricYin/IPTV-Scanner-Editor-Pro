@@ -477,6 +477,20 @@ def calculate_adaptive_delay(base_delay_ms: int = 200, min_delay_ms: int = 50, m
         return base_delay_ms
 
 
+def redact_url(url: str) -> str:
+    """移除 URL 中的用户凭证信息，用于日志记录。"""
+    if not url:
+        return url
+    try:
+        from urllib.parse import urlparse, urlunparse
+        p = urlparse(url)
+        if p.username or p.password:
+            return urlunparse((p.scheme, p.hostname or '', p.path, '', '', ''))
+        return url
+    except Exception:
+        return url
+
+
 def suppress_urllib3_warnings():
     """抑制 urllib3 SSL 警告"""
     try:

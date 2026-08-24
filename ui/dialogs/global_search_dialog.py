@@ -239,8 +239,8 @@ class GlobalSearchDialog(FloatingDialog):
                 item.setData(Qt.ItemDataRole.UserRole, idx)
                 self.result_list.addItem(item)
                 self.result_list.setItemWidget(item, item_widget)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"构建搜索结果失败 idx={idx}: {e}")
 
         count = len(self._results)
         tr = self.window.language_manager.tr

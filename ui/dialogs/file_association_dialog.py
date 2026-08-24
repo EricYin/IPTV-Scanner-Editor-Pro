@@ -1,6 +1,7 @@
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 from ..floating_dialog import FloatingDialog
+from core.log_manager import global_logger as logger
 
 
 SUPPORTED_FORMATS = {
@@ -149,8 +150,8 @@ class FileAssociationDialog(FloatingDialog):
             try:
                 registered = is_extension_registered(ext)
                 self._checkboxes[ext].setChecked(registered)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"检查文件关联状态失败 {ext}: {e}")
 
     def _on_ok(self):
         from utils.general_utils import register_extension, unregister_extension
@@ -162,8 +163,8 @@ class FileAssociationDialog(FloatingDialog):
                     register_extension(ext)
                 else:
                     unregister_extension(ext)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"设置文件关联失败 {ext}: {e}")
         self.accept()
 
     def reapply_styles(self):

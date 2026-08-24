@@ -323,8 +323,8 @@ class WindowMixin:
             try:
                 from server.app import stop_server
                 stop_server()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"停止服务器失败: {e}")
             if hasattr(self, 'event_handler') and self.event_handler:
                 self.event_handler.closeEvent(event)
             else:
@@ -342,8 +342,8 @@ class WindowMixin:
                 try:
                     from server.app import stop_server
                     stop_server()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"停止服务器失败: {e}")
                 if hasattr(self, 'event_handler') and self.event_handler:
                     self.event_handler.closeEvent(event)
                 else:
@@ -383,8 +383,8 @@ class WindowMixin:
         try:
             from server.app import stop_server
             stop_server()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"停止服务器失败: {e}")
         if hasattr(self, 'event_handler') and self.event_handler:
             self.event_handler.closeEvent(event)
         else:

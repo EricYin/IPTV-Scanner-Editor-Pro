@@ -653,7 +653,8 @@ def init_context(ext_files_dir='', files_dir='', log_level='info', native_lib_di
             _log(f'init_context failed: {e}', 'E')
             import traceback
             traceback.print_exc()
-            return f'FAILED: {e}'
+            logger.exception('操作失败')
+            return _err('操作失败')
 
 
 def _get_ctx():
@@ -690,6 +691,7 @@ def get_status_json():
             'source_message': str(status.get('message', '')),
         })
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -738,6 +740,7 @@ def get_channels_json(page=1, size=100, group='', search='', valid_filter='', so
             'groups': groups,
         })
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -754,6 +757,7 @@ def get_channel_json(idx):
         c = channels[idx]
         return _ok({k: v for k, v in c.items() if not k.startswith('_')})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -771,6 +775,7 @@ def get_groups_json():
             groups[g] = groups.get(g, 0) + 1
         return _ok([{'name': k, 'count': v} for k, v in groups.items()])
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -799,6 +804,7 @@ def add_channel(url, name, group=''):
         ctx._save_channels_to_cache()
         return _ok({'idx': len(ctx._channels) - 1})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -818,6 +824,7 @@ def update_channel(idx, json_data):
         ctx._save_channels_to_cache()
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -836,6 +843,7 @@ def delete_channel(idx):
         ctx._save_channels_to_cache()
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -851,6 +859,7 @@ def clear_local_channels():
         ctx._save_channels_to_cache()
         return _ok({'cleared': cleared})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -892,6 +901,7 @@ def import_channels(content, name=''):
             return _ok(result)
         return _ok({'imported': 0})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 # -------------------------------------------------------------------
 # 订阅源管理
@@ -909,6 +919,7 @@ def get_sources_json():
         sources = config.load_playlist_sources() or []
         return _ok(sources)
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -936,6 +947,7 @@ def export_config():
         }
         return _ok(data)
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -979,6 +991,7 @@ def import_config(json_data):
 
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1003,6 +1016,7 @@ def add_source(url, name=''):
         _log(f'add_source: done, total sources={len(sources)}')
         return _ok({'ok': True, 'count': len(sources)})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1024,6 +1038,7 @@ def delete_source(idx):
         config.save_playlist_sources(sources)
         return _ok({'ok': True, 'count': len(sources)})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1045,6 +1060,7 @@ def update_source(idx, json_data):
         config.save_playlist_sources(sources)
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1059,6 +1075,7 @@ def reload_sources(url=''):
         _log(f'reload_sources: started={result}')
         return _ok({'started': bool(result)})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1071,6 +1088,7 @@ def get_source_status_json():
         status = ctx.get_source_load_status() or {}
         return _ok(status)
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1090,6 +1108,7 @@ def get_epg_sources_json():
         sources = config.load_epg_sources() or []
         return _ok(sources)
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1117,6 +1136,7 @@ def add_epg_source(url, name=''):
             _log(f'add_epg_source: reload_epg failed: {e}', 'W')
         return _ok({'ok': True, 'count': len(sources)})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1138,6 +1158,7 @@ def delete_epg_source(idx):
         config.save_epg_sources(sources)
         return _ok({'ok': True, 'count': len(sources)})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1150,6 +1171,7 @@ def reload_epg():
         result = ctx.reload_epg()
         return _ok({'started': bool(result)})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1168,6 +1190,7 @@ def get_epg_status_json():
             'program_count': int(sm.get_epg_program_count()),
         })
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1238,6 +1261,7 @@ def get_epg_json(channel_name='', tvg_id='', tvg_name='', comma_name=''):
             'matched': bool(programmes),
         })
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1253,6 +1277,7 @@ def get_epg_channels_json():
         data = sm.get_epg_data_copy() or {}
         return _ok({'channels': list(data.keys())})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1291,6 +1316,7 @@ def start_scan(base_url, timeout=10, threads=4, engine='requests', retry=False, 
         _log(f'start_scan: started={result}')
         return _ok({'started': bool(result)})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1307,6 +1333,7 @@ def stop_scan():
         scanner.stop_scan()
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1322,6 +1349,7 @@ def get_scan_status_json():
         status = scanner.get_status() or {}
         return _ok(status)
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1337,6 +1365,7 @@ def get_scan_results_json():
         results = scanner.get_results() or []
         return _ok(results)
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1362,6 +1391,7 @@ def start_validate(timeout=10, threads=4):
         _log(f'start_validate: started={result}')
         return _ok({'started': bool(result)})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1531,6 +1561,7 @@ def batch_edit_channels(action, options_json='{}'):
             result['matched'] = changed
         return _ok(result)
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1548,6 +1579,7 @@ def get_mappings_json():
         entries = mapping_manager.get_mapping_entries() or []
         return _ok(entries)
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1566,6 +1598,7 @@ def add_mapping(raw_name, standard_name, logo_url='', group_name=''):
         )
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1588,6 +1621,7 @@ def delete_mapping(standard_name, raw_name=''):
             mapping_manager.remove_user_mapping(standard_name=str(standard_name))
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1601,6 +1635,7 @@ def refresh_mappings():
         mapping_manager.refresh_cache()
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1627,6 +1662,7 @@ def search_subtitles(query='', imdb_id='', language='all', file_path=''):
             'last_error': getattr(svc, 'last_error', '') or '',
         })
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1648,6 +1684,7 @@ def download_subtitle(download_link, dest_dir, file_name='', language=''):
             return _ok({'path': result_path})
         return _err(getattr(svc, 'last_error', '下载失败') or '下载失败')
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1693,6 +1730,7 @@ def clear_cache(cache_type='all'):
                     pass
         return _ok({'ok': True, 'deleted_count': deleted})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1725,6 +1763,7 @@ def get_thumbnail_paths(urls_json='[]'):
                     break
         return _ok({'paths': paths})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1750,6 +1789,7 @@ def capture_thumbnail(url, file_path):
         shutil.copy2(file_path, dest)
         return _ok({'path': dest})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -1902,6 +1942,7 @@ def generate_thumbnail_bg(url):
                     pass
     except Exception as e:
         _log(f'generate_thumbnail_bg: error: {e}')
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -2379,6 +2420,7 @@ def load_playback_settings(url):
         settings = store.load_settings(url or '')
         return _ok({'settings': settings})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))
 
 
@@ -2396,4 +2438,5 @@ def save_playback_settings(url, settings_json, name=''):
         store.save_settings(url or '', settings, name or '')
         return _ok({'ok': True})
     except Exception as e:
+        logger.exception('操作失败')
         return _err(str(e))

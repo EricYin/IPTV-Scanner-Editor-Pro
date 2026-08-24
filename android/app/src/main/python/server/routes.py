@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 from server.app import get_channel_model, get_config, get_main_window, get_server, get_context
 from utils.platform_utils import get_android_data_dir, is_android
+from utils.general_utils import redact_url
 
 logger = logging.getLogger('server.routes')
 
@@ -875,7 +876,8 @@ async def handle_channels_list(request):
         )
     except Exception as e:
         logger.error(f"频道列表加载异常: {e}", exc_info=True)
-        return _json_error(f'加载失败: {e}', 500)
+        logger.exception(f'加载失败:')
+        return _json_error(f'加载失败:', 500)
 
 
 async def handle_channel_get(request):
@@ -1013,7 +1015,8 @@ async def handle_channels_import(request):
         ctx._channels_list = all_groups if hasattr(ctx, '_channels_list') else None
         return _json_success(imported=len(channels))
     except Exception as e:
-        return _json_error(f'解析失败: {e}', 500)
+        logger.exception(f'解析失败:')
+        return _json_error(f'解析失败:', 500)
 
 
 async def handle_channels_batch(request):
@@ -1612,7 +1615,8 @@ async def handle_mappings_list(request):
                 pass
         return _json_success(entries=entries, remote_url=remote_url)
     except Exception as e:
-        return _json_error(f'获取映射失败: {e}', 500)
+        logger.exception(f'获取映射失败:')
+        return _json_error(f'获取映射失败:', 500)
 
 
 async def handle_mappings_add(request):
@@ -1635,7 +1639,8 @@ async def handle_mappings_add(request):
         mm.add_user_mapping(raw_name, standard_name, logo_url, group_name)
         return _json_success(message='映射已添加')
     except Exception as e:
-        return _json_error(f'添加映射失败: {e}', 500)
+        logger.exception(f'添加映射失败:')
+        return _json_error(f'添加映射失败:', 500)
 
 
 async def handle_mappings_delete(request):
@@ -1652,7 +1657,8 @@ async def handle_mappings_delete(request):
             mm.remove_user_mapping(key)
         return _json_success(message='映射已删除')
     except Exception as e:
-        return _json_error(f'删除映射失败: {e}', 500)
+        logger.exception(f'删除映射失败:')
+        return _json_error(f'删除映射失败:', 500)
 
 
 async def handle_mappings_refresh(request):
@@ -1672,7 +1678,8 @@ async def handle_mappings_refresh(request):
         threading.Thread(target=_do_refresh, daemon=True).start()
         return _json_success(message='正在刷新远程映射...')
     except Exception as e:
-        return _json_error(f'刷新失败: {e}', 500)
+        logger.exception(f'刷新失败:')
+        return _json_error(f'刷新失败:', 500)
 
 
 async def handle_epg(request):
@@ -1777,7 +1784,7 @@ async def handle_stream_proxy(request):
     # SSRF 防护：使用统一的 URL 安全检查
     is_safe, reject_reason = _is_safe_stream_url(stream_url)
     if not is_safe:
-        logger.warning(f'Stream proxy blocked: {stream_url} - {reject_reason}')
+        logger.warning(f'Stream proxy blocked: {redact_url(stream_url)} - {reject_reason}')
         return _json_error(f'不允许的流地址: {reject_reason}', 403)
     session = await _get_stream_session()
     try:
@@ -1798,8 +1805,9 @@ async def handle_stream_proxy(request):
         # 客户端断开连接，正常终止
         return web.Response(status=499)
     except Exception as e:
-        logger.error(f"流代理失败: {stream_url} - {e}")
-        return _json_error(f'流代理失败: {e}', 502)
+        logger.error(f"流代理失败: {redact_url(stream_url)} - {e}")
+        logger.exception(f'流代理失败:')
+        return _json_error(f'流代理失败:', 502)
 
 
 # ===================== 播放器远程控制 =====================
@@ -1834,7 +1842,8 @@ async def handle_player_chapters(request):
         return _json_success(data=chapters)
     except Exception as e:
         logger.error(f"获取章节列表失败: {e}")
-        return _json_error(f'获取章节失败: {e}', 500)
+        logger.exception(f'获取章节失败:')
+        return _json_error(f'获取章节失败:', 500)
 
 
 async def handle_player_hdr(request):
@@ -1857,7 +1866,8 @@ async def handle_player_hdr(request):
         return _json_success(mode=mode)
     except Exception as e:
         logger.error(f"切换 HDR 模式失败: {e}")
-        return _json_error(f'切换 HDR 失败: {e}', 500)
+        logger.exception(f'切换 HDR 失败:')
+        return _json_error(f'切换 HDR 失败:', 500)
 
 
 async def handle_player_screenshot(request):
@@ -1885,7 +1895,8 @@ async def handle_player_screenshot(request):
         return _json_success(path=fpath)
     except Exception as e:
         logger.error(f"截图失败: {e}")
-        return _json_error(f'截图失败: {e}', 500)
+        logger.exception(f'截图失败:')
+        return _json_error(f'截图失败:', 500)
 
 
 # ===================== 字幕在线下载 =====================
@@ -1937,7 +1948,8 @@ async def handle_subtitle_search(request):
         return _json_success(data=data)
     except Exception as e:
         logger.error(f"字幕搜索失败: {e}")
-        return _json_error(f'字幕搜索失败: {e}', 500)
+        logger.exception(f'字幕搜索失败:')
+        return _json_error(f'字幕搜索失败:', 500)
 
 
 async def handle_subtitle_download(request):
@@ -1963,7 +1975,8 @@ async def handle_subtitle_download(request):
         return _json_success(path=path)
     except Exception as e:
         logger.error(f"字幕下载失败: {e}")
-        return _json_error(f'字幕下载失败: {e}', 500)
+        logger.exception(f'字幕下载失败:')
+        return _json_error(f'字幕下载失败:', 500)
 
 
 # ===================== 文件分享与缓存清理 =====================
@@ -2010,7 +2023,8 @@ async def handle_share_file(request):
         return _json_success()
     except Exception as e:
         logger.error(f"分享文件失败: {e}")
-        return _json_error(f'分享失败: {e}', 500)
+        logger.exception(f'分享失败:')
+        return _json_error(f'分享失败:', 500)
 
 
 async def handle_cache_clear(request):
@@ -2053,7 +2067,8 @@ async def handle_cache_clear(request):
         return _json_success(cleared=cleared)
     except Exception as e:
         logger.error(f"清空缓存失败: {e}")
-        return _json_error(f'清空缓存失败: {e}', 500)
+        logger.exception(f'清空缓存失败:')
+        return _json_error(f'清空缓存失败:', 500)
 
 
 # ===================== 日志查看与下载 =====================
@@ -2114,7 +2129,8 @@ async def handle_log_view(request):
         )
     except Exception as e:
         logger.error(f"查看日志失败: {e}")
-        return _json_error(f'查看日志失败: {e}', 500)
+        logger.exception(f'查看日志失败:')
+        return _json_error(f'查看日志失败:', 500)
 
 
 async def handle_log_download(request):
@@ -2140,7 +2156,8 @@ async def handle_log_download(request):
         )
     except Exception as e:
         logger.error(f"下载日志失败: {e}")
-        return _json_error(f'下载日志失败: {e}', 500)
+        logger.exception(f'下载日志失败:')
+        return _json_error(f'下载日志失败:', 500)
 
 
 async def handle_log_clear(request):
@@ -2158,4 +2175,5 @@ async def handle_log_clear(request):
         return _json_success()
     except Exception as e:
         logger.error(f"清空日志失败: {e}")
-        return _json_error(f'清空日志失败: {e}', 500)
+        logger.exception(f'清空日志失败:')
+        return _json_error(f'清空日志失败:', 500)

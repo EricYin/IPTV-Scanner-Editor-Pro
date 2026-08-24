@@ -803,10 +803,9 @@ class MpvPlayerController(QObject):
                 if not port:
                     port = 443 if parsed.scheme == 'https' else 80
                 # 使用 AF_UNSPEC 支持 IPv4 和 IPv6（getaddrinfo 自动选择）
-                sock = socket.socket(socket.AF_UNSPEC, socket.SOCK_STREAM)
-                sock.settimeout(3)
-                sock.connect((host, port))
-                sock.close()
+                with socket.socket(socket.AF_UNSPEC, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(3)
+                    sock.connect((host, port))
             except (socket.timeout, socket.error, OSError) as e:
                 return f"网络不可达: {host}:{port} ({e})"
             except Exception as e:

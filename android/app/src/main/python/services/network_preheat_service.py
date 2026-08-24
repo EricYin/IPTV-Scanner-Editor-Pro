@@ -3,6 +3,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 from PySide6.QtCore import QObject, Signal
+from core.log_manager import global_logger as logger
 
 
 class DnsPrefetcher(QObject):
@@ -33,8 +34,8 @@ class DnsPrefetcher(QObject):
                 self._executor.submit(self._resolve, host)
             except RuntimeError:
                 pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"DNS 预解析提交失败: {e}")
 
     def prefetch_many(self, urls):
         for url in urls:
@@ -51,8 +52,8 @@ class DnsPrefetcher(QObject):
                     self.dns_resolved.emit(host, ip)
                 except RuntimeError:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"DNS 预解析失败 {host}: {e}")
 
     def get_cached_ip(self, host):
         with self._lock:
@@ -108,8 +109,8 @@ class ConnectionPreheater(QObject):
                 self._executor.submit(self._connect, host, port, cache_key)
             except RuntimeError:
                 pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"连接预热提交失败: {e}")
 
     def preheat_many(self, urls):
         for url in urls:
@@ -125,8 +126,8 @@ class ConnectionPreheater(QObject):
                 self.connection_ready.emit(cache_key)
             except RuntimeError:
                 pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"连接预热失败 {cache_key}: {e}")
 
     def clear(self):
         with self._lock:

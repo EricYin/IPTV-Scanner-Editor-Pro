@@ -211,8 +211,8 @@ class MultiScreenController(QObject):
         if player:
             try:
                 player.set_volume(volume)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"多画面设置音量失败: {e}")
 
         if self._widget:
             cell = self._widget.get_cell(index)
@@ -251,8 +251,8 @@ class MultiScreenController(QObject):
                     cell = self._widget.get_cell(index) if self._widget else None
                     vol = cell._volume_slider.value() if cell else 80
                     player.set_volume(vol)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"多画面静音切换失败: {e}")
 
     def _start_info_timer(self):
         if self._info_timer:
@@ -280,8 +280,8 @@ class MultiScreenController(QObject):
                     new_titles = [t.get('title', '') or t.get('lang', '') or self.window.language_manager.tr('ctx_audio_track_n', 'Track {}').format(t.get('id', 0)) for t in tracks]
                     if current_titles != new_titles:
                         cell.set_audio_tracks(tracks, tr=self.window.language_manager.tr)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"多画面音轨更新失败: {e}")
 
     def terminate(self):
         self._stop_all_cells()

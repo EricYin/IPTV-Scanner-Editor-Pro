@@ -612,8 +612,8 @@ class UIController:
             # 更新播放列表中对应条目的评分条
             if hasattr(self.window, 'channel_ctrl'):
                 self.window.channel_ctrl.update_quality_bar_for_url(url, total, grade)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"更新频道质量评分失败: {e}")
 
     def update_media_info(self):
         """更新媒体信息显示"""
@@ -1615,8 +1615,8 @@ class UIController:
                     log_group.addAction(action)
                 current_level: int = getattr(logging, current_level_name, logging.INFO)
                 global_logger.set_level(current_level)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"创建日志菜单失败: {e}")
 
         except Exception as e:
             logger.error(f"创建菜单栏失败: {str(e)}")
@@ -1676,8 +1676,8 @@ class UIController:
                 from PySide6.QtCore import QTimer
                 from utils.thread_safety import safe_single_shot
                 safe_single_shot(500, w, lambda: w.catchup_ctrl.start_catchup(program))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"EPG 节目跳转失败: {e}")
 
     def _show_epg_timeline(self):
         from ui.dialogs.epg_timeline_dialog import EpgTimelineDialog

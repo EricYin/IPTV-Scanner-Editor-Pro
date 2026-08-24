@@ -234,8 +234,8 @@ class UpdateDownloadThread(QThread):
                             self.progress.emit(0, tr('sha256_acquired', '已获取 SHA256 校验值'))
                         else:
                             expected_sha256 = None
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"获取 SHA256 校验值失败，将跳过完整性校验: {e}")
 
             async with session.get(
                 self._url,

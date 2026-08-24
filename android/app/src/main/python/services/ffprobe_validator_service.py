@@ -219,7 +219,8 @@ class FfprobeStreamValidator:
             result['error_type'] = 'no_streams'
 
         except Exception as e:
-            result['error'] = str(e)
+            global_logger.debug(f"ffprobe 验证未知异常: {e}")
+            result['error'] = '内部错误'
             result['error_type'] = 'unknown_error'
         finally:
             sem.release()

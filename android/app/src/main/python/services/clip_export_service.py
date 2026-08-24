@@ -299,7 +299,17 @@ class ClipExportService:
                 self._cleanup_tmp(tmp_dir)
                 self._call(done_callback, False,
                            self._tr('clip_export_save_gif_failed', '保存 GIF 失败: {err}').format(err=e))
+                for img in images:
+                    try:
+                        img.close()
+                    except Exception:
+                        pass
                 return
+            for img in images:
+                try:
+                    img.close()
+                except Exception:
+                    pass
             self._cleanup_tmp(tmp_dir)
             if self._cancel:
                 try:

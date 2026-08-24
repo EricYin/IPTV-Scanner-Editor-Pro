@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLineEdit,
 from PySide6.QtCore import Qt, Signal, QThread, QTimer
 from ui.styles import AppStyles
 from ui.floating_dialog import FloatingDialog
+from core.log_manager import global_logger as logger
 
 
 class _EpgSearchWorker(QThread):
@@ -222,8 +223,8 @@ class EpgSearchDialog(FloatingDialog):
                 item = QListWidgetItem(display)
                 item.setData(Qt.ItemDataRole.UserRole, idx)
                 self.result_list.addItem(item)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"构建 EPG 搜索结果失败 idx={idx}: {e}")
 
         is_truncated = len(results) >= _EpgSearchWorker.MAX_RESULTS
         count = len(results)
