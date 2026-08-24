@@ -35,11 +35,8 @@ class StreamQualityDialog(FloatingDialog):
         self._labels = {}
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
         # 每秒刷新（与安卓端 StreamQualityPanel / Web 端 setInterval 1000ms 一致）
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
@@ -346,9 +343,6 @@ class StreamQualityDialog(FloatingDialog):
 
     def closeEvent(self, event):
         self._timer.stop()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

@@ -133,7 +133,7 @@ class MultiScreenCell(QWidget):
 
         vol_label = QLabel()
         vol_label.setFixedSize(18, 18)
-        vol_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        vol_icon_color = AppStyles.get_color('player_panel_text')
         vol_icon_path = AppStyles.get_icon('speaker', vol_icon_color, 14)
         if vol_icon_path:
             vol_label.setPixmap(QIcon(vol_icon_path).pixmap(14, 14))
@@ -409,7 +409,7 @@ class MultiScreenWidget(QWidget):
 
         self._mute_button = QToolButton()
         self._mute_button.setFixedSize(24, 20)
-        mute_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        mute_color = AppStyles.get_color('player_panel_text')
         mute_icon_path = AppStyles.get_icon('volume', mute_color, 14)
         if mute_icon_path:
             self._mute_button.setIcon(QIcon(mute_icon_path))
@@ -498,7 +498,7 @@ class MultiScreenWidget(QWidget):
             self.global_mute_toggled.emit(True)
 
     def _update_mute_button(self, muted: bool):
-        color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        color = AppStyles.get_color('player_panel_text')
         if muted:
             icon_path = AppStyles.get_icon('volume_mute', color, 14)
 

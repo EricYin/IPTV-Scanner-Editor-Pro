@@ -56,11 +56,8 @@ class GlobalSearchDialog(FloatingDialog):
         self._results: List[Dict[str, Any]] = []
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
 
     def closeEvent(self, event):
         if getattr(self, '_epg_worker', None):
@@ -68,11 +65,8 @@ class GlobalSearchDialog(FloatingDialog):
             self._epg_worker.wait(3000)
             self._epg_worker.deleteLater()
             self._epg_worker = None
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)
 
     def reapply_styles(self):

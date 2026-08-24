@@ -44,11 +44,8 @@ class NetworkEnhanceDialog(FloatingDialog):
         self._loading = False
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
         self._reload_from_config()
 
     def reapply_styles(self):
@@ -212,9 +209,6 @@ class NetworkEnhanceDialog(FloatingDialog):
         self.headers_edit.clear()
 
     def closeEvent(self, event):
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

@@ -132,11 +132,8 @@ class AudioEqualizerDialog(FloatingDialog):
         self._monitor_timer = None
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
         self._reload_from_config()
         # 监听频道切换，自动刷新 VU 电平表
         pc = self.window.player_controller
@@ -738,9 +735,6 @@ class AudioEqualizerDialog(FloatingDialog):
                 pc.file_loaded.disconnect(self._on_file_loaded)
             except Exception:
                 pass
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

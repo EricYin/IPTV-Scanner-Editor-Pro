@@ -49,11 +49,8 @@ class FileAssociationDialog(FloatingDialog):
         get_theme_manager().register_window(self)
 
     def closeEvent(self, event):
-        try:
-            from ..theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)
 
     def _tr(self, key, fallback):

@@ -1,3 +1,4 @@
+from core.log_manager import global_logger as logger
 import re
 from datetime import datetime, timedelta, timezone
 from core.play_state import PlayMode
@@ -140,7 +141,6 @@ class CatchupController:
                     py_fmt = py_fmt.replace('ss', '%S')
                     result = target_dt.strftime(py_fmt)
                 except Exception:
-                    from core.log_manager import global_logger as logger
                     logger.debug("build_catchup_url: 自定义格式解析失败，使用默认格式")
                     result = target_dt.strftime('%Y%m%d%H%M%S')
             return result
@@ -188,7 +188,6 @@ class CatchupController:
         return url
 
     def build_catchup_url(self, channel: dict, start_time: datetime, end_time: datetime) -> str:
-        from core.log_manager import global_logger as logger
 
         catchup_type = (channel.get('catchup', '') or '').lower().strip()
         catchup_source = channel.get('catchup_source', '')
@@ -272,7 +271,6 @@ class CatchupController:
         return catchup_url if catchup_url else live_url
 
     def start_catchup(self, program):
-        from core.log_manager import global_logger as logger
 
         if not self.window.current_channel:
             return
@@ -343,7 +341,6 @@ class CatchupController:
                 self.window._populate_epg_list()
 
     def add_exit_catchup_button(self):
-        from core.log_manager import global_logger as logger
 
         if hasattr(self.window, 'exit_catchup_button') and self.window.exit_catchup_button:
             try:
@@ -357,7 +354,6 @@ class CatchupController:
 
     def exit_catchup(self):
 
-        from core.log_manager import global_logger as logger
 
         saved_original_channel = self.original_channel or self.window.current_channel
 
@@ -383,7 +379,6 @@ class CatchupController:
         self._clear_catchup_state()
 
     def show_exit_timeshift_button(self):
-        from core.log_manager import global_logger as logger
 
         if hasattr(self.window, 'exit_catchup_button') and self.window.exit_catchup_button:
             try:
@@ -396,7 +391,6 @@ class CatchupController:
                 logger.error(f"显示退出时移按钮失败: {e}")
 
     def exit_timeshift(self):
-        from core.log_manager import global_logger as logger
 
         saved_original = self.original_channel or self.window.current_channel
 
@@ -433,7 +427,6 @@ class CatchupController:
 
     def seek_catchup(self, position: float):
         w = self.window
-        from core.log_manager import global_logger as logger
 
         import time as _time
 
@@ -552,7 +545,6 @@ class CatchupController:
 
     def _try_mpv_seek(self, position):
         w = self.window
-        from core.log_manager import global_logger as logger
 
         if not hasattr(w, 'player_controller') or not w.player_controller:
             return False
@@ -627,7 +619,6 @@ class CatchupController:
             if elapsed < self.URL_REBUILD_COOLDOWN:
                 self._ensure_cooldown_timer()
                 return
-            from core.log_manager import global_logger as logger
             logger.info(f"冷却期结束，执行延迟的时移seek: position={position:.1f}s")
             self.seek_catchup(position)
 
@@ -635,7 +626,6 @@ class CatchupController:
         """时移流播放到终点后自动续播：从当前播放位置重建时移URL"""
         w = self.window
 
-        from core.log_manager import global_logger as logger
 
         if not self.catchup_program or not self.original_channel:
             logger.warning("时移续播失败: 缺少节目信息")
@@ -678,7 +668,6 @@ class CatchupController:
     def start_live_timeshift_from_progress(self, slider_seconds, catchup_source, has_epg=True):
         w = self.window
 
-        from core.log_manager import global_logger as logger
 
         now = datetime.now()
 
@@ -753,7 +742,6 @@ class CatchupController:
             try:
                 self._cooldown_timer.stop()
             except Exception:
-                from core.log_manager import global_logger as logger
                 logger.debug("自动检测回看模式失败，将使用默认方式")
             self._cooldown_timer = None
         w._catchup_start_time = _time.time()

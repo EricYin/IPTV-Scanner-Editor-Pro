@@ -42,11 +42,8 @@ class VideoOpenDialog(FloatingDialog):
         from ui.styles import AppStyles
         self.setStyleSheet(AppStyles.popup_dialog_style())
 
-        try:
-            from ..theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -121,11 +118,8 @@ class VideoOpenDialog(FloatingDialog):
         QTimer.singleShot(0, self._list.setFocus)
 
     def closeEvent(self, event):
-        try:
-            from ..theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)
 
     def reapply_styles(self):

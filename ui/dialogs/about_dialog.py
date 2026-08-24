@@ -1,3 +1,4 @@
+from core.version import APP_USER_AGENT
 import os
 
 from PySide6 import QtWidgets, QtCore
@@ -35,11 +36,8 @@ class AboutDialog(FloatingDialog):
         self._closing = True
         if hasattr(self, '_version_thread') and self._version_thread.is_alive():
             self._version_thread.join(timeout=2.0)
-        try:
-            from ..theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)
 
     def _init_ui(self):
@@ -281,7 +279,7 @@ class AboutDialog(FloatingDialog):
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     "https://api.github.com/repos/sumingyd/IPTV-Scanner-Editor-Pro/releases/latest",
-                    headers={'User-Agent': 'IPTV-Scanner-Editor-Pro'}
+                    headers={'User-Agent': APP_USER_AGENT}
                 ) as response:
                     if response.status == 200:
                         data = await response.json()

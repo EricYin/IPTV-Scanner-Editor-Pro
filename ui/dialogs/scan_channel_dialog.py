@@ -3163,11 +3163,8 @@ class ScanChannelDialog(FloatingDialog):
         if hasattr(self, 'application') and self.application:
             if hasattr(self.application, '_scan_dialog'):
                 self.application._scan_dialog = None
-        try:
-            from ..theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         self._unregister_cleanup_handlers()
         event.accept()
 

@@ -38,11 +38,8 @@ class BurstScreenshotDialog(FloatingDialog):
         self._burst_interval = 2.0
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
         self._update_ui_state()
 
     def reapply_styles(self):
@@ -205,9 +202,6 @@ class BurstScreenshotDialog(FloatingDialog):
         # 关闭时停止连拍
         if self._burst_timer.isActive():
             self._burst_timer.stop()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

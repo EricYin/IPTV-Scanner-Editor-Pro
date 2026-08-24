@@ -35,7 +35,7 @@ class PlaylistPanelMixin:
         epg_title_row = QHBoxLayout()
         epg_title_row.setSpacing(6)
         epg_title_row.setContentsMargins(8, 4, 8, 0)
-        epg_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        epg_icon_color = AppStyles.get_color('player_panel_text')
         self.epg_title_icon = QLabel()
         self.epg_title_icon.setFixedSize(16, 16)
         self.epg_title_icon.setStyleSheet("background: transparent; border: none;")
@@ -54,7 +54,7 @@ class PlaylistPanelMixin:
         date_layout.setContentsMargins(8, 4, 8, 4)
         date_layout.setSpacing(8)
 
-        date_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        date_icon_color = AppStyles.get_color('player_panel_text')
         self.epg_prev_day = QPushButton()
         self.epg_prev_day.setIcon(QIcon(AppStyles.get_icon('chevron_left', date_icon_color, 12)))  # type: ignore[arg-type]
         self.epg_prev_day.setIconSize(QSize(12, 12))
@@ -188,7 +188,7 @@ class PlaylistPanelMixin:
         tab_switch_row = QHBoxLayout()
         tab_switch_row.setContentsMargins(0, 0, 0, 0)
         tab_switch_row.setSpacing(2)
-        tab_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        tab_icon_color = AppStyles.get_color('player_panel_text')
         btn_icon_size = QSize(14, 14)
 
         self._playlist_tab_btns = []
@@ -218,11 +218,11 @@ class PlaylistPanelMixin:
                     font-size: 11px;
                 }}
                 QToolButton:checked {{
-                    color: {AppStyles._get_colors().get('accent', AppStyles._safe_fallback('accent'))};
+                    color: {AppStyles.get_color('accent')};
                     font-weight: bold;
                 }}
                 QToolButton:hover {{
-                    color: {AppStyles._get_colors().get('accent', AppStyles._safe_fallback('accent'))};
+                    color: {AppStyles.get_color('accent')};
                 }}
             """)
             btn.setToolTip(tooltip)
@@ -304,7 +304,7 @@ class PlaylistPanelMixin:
         self.sub_group_combo.currentTextChanged.connect(self.on_sub_group_changed)
         sub_layout.addWidget(self.sub_group_combo)
 
-        view_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        view_icon_color = AppStyles.get_color('player_panel_text')
         search_row, self.sub_search_input, self.sub_view_list_btn, self.sub_view_grid_btn, self._sub_view_group = \
             self._create_channel_search_row(tr, view_icon_color, self._on_sub_search_changed, 'sub')
         sub_layout.addLayout(search_row)
@@ -337,7 +337,7 @@ class PlaylistPanelMixin:
         self.local_group_combo.currentTextChanged.connect(self.on_local_group_changed)
         local_layout.addWidget(self.local_group_combo)
 
-        view_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        view_icon_color = AppStyles.get_color('player_panel_text')
         search_row, self.local_search_input, self.local_view_list_btn, self.local_view_grid_btn, self._local_view_group = \
             self._create_channel_search_row(tr, view_icon_color, self._on_local_search_changed, 'local')
         local_layout.addLayout(search_row)

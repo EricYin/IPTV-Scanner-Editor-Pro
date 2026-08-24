@@ -39,11 +39,8 @@ class ClipExportDialog(FloatingDialog):
         self.setMinimumSize(480, 380)
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
         # 初始化默认值
         QTimer.singleShot(50, self._populate_current_position)
 
@@ -297,9 +294,6 @@ class ClipExportDialog(FloatingDialog):
         svc = getattr(self.window, 'clip_export_service', None)
         if svc and hasattr(svc, 'cancel'):
             svc.cancel()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

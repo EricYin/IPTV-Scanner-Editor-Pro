@@ -155,6 +155,11 @@ class AppStyles:
         return dark_fallbacks.get(key, '#888888')
 
     @classmethod
+    def get_color(cls, key: str) -> str:
+        """获取主题颜色，自动使用 _safe_fallback 作为回退"""
+        return cls._get_colors().get(key, cls._safe_fallback(key))
+
+    @classmethod
     def _get_scaled_radius(cls, widget_type: str) -> int:
         r = cls._get_style_border_radius()
         scaling = {

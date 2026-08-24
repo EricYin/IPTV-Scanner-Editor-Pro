@@ -47,11 +47,8 @@ class PlaybackQueueDialog(FloatingDialog):
         self._loading = False
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
         # 启动后短暂延迟加载初始状态
         QTimer.singleShot(80, self._reload_state)
 
@@ -330,9 +327,6 @@ class PlaybackQueueDialog(FloatingDialog):
         return []
 
     def closeEvent(self, event):
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

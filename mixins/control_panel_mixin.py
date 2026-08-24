@@ -56,7 +56,7 @@ class ControlPanelMixin:
 
     def _set_info_label_icon(self, icon_label: QLabel, icon_name: str):
         """设置信息行前的小图标"""
-        color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        color = AppStyles.get_color('player_panel_text')
         icon_path = AppStyles.get_icon(icon_name, color, 16)
         if icon_path:
             from PySide6.QtGui import QPixmap
@@ -228,7 +228,7 @@ class ControlPanelMixin:
         self.control_row = QHBoxLayout()
         self.control_row.setSpacing(8)
 
-        btn_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        btn_color = AppStyles.get_color('player_panel_text')
         btn_icon_size = QSize(20, 20)
         self.prev_ch_button = QToolButton()
         self.prev_ch_button.setIcon(QIcon(AppStyles.get_icon('prev', btn_color)))  # type: ignore[arg-type]

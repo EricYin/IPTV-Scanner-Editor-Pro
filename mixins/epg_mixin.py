@@ -42,12 +42,9 @@ class EpgMixin:
                 or self.current_channel.get('catchup', '')
             ))
             if not supports_catchup and self.current_channel:
-                try:
-                    from services.m3u_parser import detect_catchup_pattern
-                    if detect_catchup_pattern(self.current_channel.get('url', '')):
-                        supports_catchup = True
-                except Exception:
-                    pass
+                from services.m3u_parser import safe_detect_catchup_source
+                if safe_detect_catchup_source(self.current_channel.get('url', '')):
+                    supports_catchup = True
             if end_dt < now and self.current_channel and supports_catchup:
                 catchup_action = QAction(tr('menu_catchup', '回看'), menu)
                 catchup_action.triggered.connect(lambda: self.catchup_ctrl.start_catchup(program))

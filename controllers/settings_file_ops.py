@@ -888,7 +888,6 @@ class SettingsFileOperations:
                     # 即时应用可运行时修改的参数（无需重启 mpv）
                     self._apply_runtime_playback_params(pc, old_playback, new_playback)
             except Exception as e:
-                from core.log_manager import global_logger
                 global_logger.debug(f"更新播放设置失败: {e}")
 
     @staticmethod
@@ -932,7 +931,6 @@ class SettingsFileOperations:
                             new_val = 'no'
                 pc.set_property_string(mpv_prop, str(new_val))
             except Exception as e:
-                from core.log_manager import global_logger
                 global_logger.debug(f"即时应用 {mpv_prop}={new_val} 失败: {e}")
 
         # 反交错：使用 vf 滤镜（yadif=mode=1 bob）代替 deinterlace 属性，保持帧率不变
@@ -946,7 +944,6 @@ class SettingsFileOperations:
                 else:
                     pc._disable_deinterlace_filter()
             except Exception as e:
-                from core.log_manager import global_logger
                 global_logger.debug(f"即时应用 deinterlace={new_di} 失败: {e}")
 
         # audio_passthrough 需要特殊处理（映射到 audio-spdif + audio-passthrough）
@@ -969,14 +966,12 @@ class SettingsFileOperations:
                     pc.set_property_string('audio-spdif', '')
                     pc.set_property_string('audio-passthrough', '')
             except Exception as e:
-                from core.log_manager import global_logger
                 global_logger.debug(f"即时应用 audio-passthrough={new_pt} 失败: {e}")
 
         # 必须重启 mpv 的 option 变化记录日志（vo/tls-verify/network-timeout）
         restart_required_keys = ('vo', 'tls_verify', 'network_timeout_sec')
         for key in restart_required_keys:
             if old_playback.get(key) != new_playback.get(key):
-                from core.log_manager import global_logger
                 global_logger.info(
                     f"播放参数 {key} 已更改，将在下次重启播放器后完全生效"
                 )

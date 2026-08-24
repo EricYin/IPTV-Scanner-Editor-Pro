@@ -340,6 +340,15 @@ def _auto_detect_catchup_from_url(url: str, channel: Dict[str, Any]):
         pass
 
 
+def safe_detect_catchup_source(url: str) -> Optional[str]:
+    """安全检测 catchup 源，失败时返回 None"""
+    try:
+        detected = detect_catchup_pattern(url)
+        return detected[1] if detected else None
+    except Exception:
+        return None
+
+
 def _make_empty_channel(group: str = '未分类', groups: Optional[List[str]] = None, extinf: str = '') -> Dict[str, Any]:
     return {
         'name': '未命名',

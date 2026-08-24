@@ -36,11 +36,8 @@ class BookmarkDialog(FloatingDialog):
         self.setMinimumSize(640, 480)
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
         QTimer.singleShot(50, self._reload_all)
 
     @property
@@ -460,9 +457,6 @@ class BookmarkDialog(FloatingDialog):
             ctrl.seek_to_bookmark(url, position)
 
     def closeEvent(self, event):
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

@@ -3,6 +3,7 @@
 从 pyqt_player.py 提取的独立模块
 """
 
+from core.log_manager import global_logger as logger
 from PySide6.QtCore import Qt, QEvent, QTimer
 from controllers.main_window_protocol import MainWindowProtocol
 from utils.thread_safety import safe_single_shot
@@ -153,7 +154,6 @@ class EventHandler:
 
     def _handle_global_shortcut(self, key, modifiers) -> bool:
         """统一快捷键分发（所有快捷键在此处理，保证可靠触发）"""
-        from core.log_manager import global_logger as logger
         try:
             if self._is_input_widget_focused():
                 return False
@@ -474,7 +474,6 @@ class EventHandler:
         try:
             w.player_controller.seek_relative_seconds(seconds)
         except Exception as e:
-            from core.log_manager import global_logger as logger
             logger.debug(f"快进快退失败: {e}")
 
     def _on_mouse_activity(self):
@@ -535,7 +534,6 @@ class EventHandler:
 
             self.window.update_floating_position()
         except Exception as e:
-            from core.log_manager import global_logger as logger
             logger.error(f"延迟定位悬浮窗失败: {e}")
 
     def changeEvent(self, event):
@@ -597,7 +595,6 @@ class EventHandler:
 
     def closeEvent(self, event):
         """窗口关闭事件"""
-        from core.log_manager import global_logger as logger
         logger.debug("关闭事件 - 清理所有资源")
 
         if hasattr(self.window, '_stop_auto_hide_timer'):

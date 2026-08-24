@@ -1,3 +1,4 @@
+from core.version import APP_USER_AGENT
 import os
 import json
 import time
@@ -141,7 +142,7 @@ class StandaloneScanner:
                     try:
                         # GET + Range（只读前 2KB，避免下载整个流）
                         r = _http_get(u, timeout=timeout, allow_redirects=True,
-                                          headers={'User-Agent': 'IPTV-Scanner/1.0',
+                                          headers={'User-Agent': APP_USER_AGENT,
                                                    'Range': 'bytes=0-2047'},
                                           stream=True)
                         latency = int((time.time() - t0) * 1000)
@@ -437,7 +438,7 @@ class StandaloneScanner:
                 if low.startswith('http://') or low.startswith('https://'):
                     try:
                         r = _http_get(url, timeout=timeout, allow_redirects=True,
-                                          headers={'User-Agent': 'IPTV-Scanner/1.0',
+                                          headers={'User-Agent': APP_USER_AGENT,
                                                    'Range': 'bytes=0-2047'},
                                           stream=True)
                         status_code = r.status_code
@@ -587,7 +588,7 @@ class StandaloneScanner:
                     continue
                 try:
                     from utils.http_session import get as _http_get
-                    resp = _http_get(src_url, timeout=15, headers={'User-Agent': 'IPTV-Scanner/1.0'})
+                    resp = _http_get(src_url, timeout=15, headers={'User-Agent': APP_USER_AGENT})
                     content = load_m3u_from_url_data(resp.content)
                     channels, header_attrs = parse_m3u_content(content)
                     if channels:
@@ -854,7 +855,7 @@ class ServerContext:
                     self._source_load_status['message'] = f'加载中 {idx+1}/{len(sources)}'
                 try:
                     from utils.http_session import get as _http_get
-                    resp = _http_get(src_url, timeout=15, headers={'User-Agent': 'IPTV-Scanner/1.0'})
+                    resp = _http_get(src_url, timeout=15, headers={'User-Agent': APP_USER_AGENT})
                     if resp.status_code != 200:
                         err = f'HTTP {resp.status_code}'
                         errors.append(err)

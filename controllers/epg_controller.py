@@ -146,12 +146,9 @@ class EPGController:
             return True
         # 3. URL 匹配 PLTV/SNM 模式
         if live_url:
-            try:
-                from services.m3u_parser import detect_catchup_pattern
-                if detect_catchup_pattern(live_url):
-                    return True
-            except Exception:
-                pass
+            from services.m3u_parser import safe_detect_catchup_source
+            if safe_detect_catchup_source(live_url):
+                return True
         # 4. 其他情况不支持
         return False
 

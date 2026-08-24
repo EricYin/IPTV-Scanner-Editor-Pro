@@ -153,11 +153,8 @@ class ReminderPopup(FloatingDialog):
                 btn.setStyleSheet(AppStyles.button_style())
 
     def _register_theme(self):
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
 
     def reapply_styles(self):
         self._apply_theme()
@@ -167,11 +164,8 @@ class ReminderPopup(FloatingDialog):
             self._auto_close_timer.stop()
         if hasattr(self, '_progress_timer') and self._progress_timer:
             self._progress_timer.stop()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)
 
     def show(self):

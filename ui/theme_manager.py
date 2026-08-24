@@ -1,3 +1,4 @@
+from core.log_manager import global_logger as logger
 from PySide6 import QtCore, QtWidgets
 from ui.styles import AppStyles
 from utils.singleton import Singleton
@@ -98,7 +99,6 @@ class ThemeManager(Singleton, QtCore.QObject):
             QtWidgets.QApplication.processEvents()
         except Exception as e:
             window.setUpdatesEnabled(True)
-            from core.log_manager import global_logger as logger
             logger.error(f"应用主题到窗口失败: {e}")
 
     def _apply_window_backdrop(self, window):
@@ -126,7 +126,6 @@ class ThemeManager(Singleton, QtCore.QObject):
                         else:
                             self._disable_dwm_blur(dock)
         except Exception as e:
-            from core.log_manager import global_logger as logger
             logger.error(f"设置窗口背景模糊失败: {e}")
 
     def _enable_dwm_blur(self, window):
@@ -250,7 +249,6 @@ class ThemeManager(Singleton, QtCore.QObject):
             if pc and hasattr(pc, 'player') and hasattr(pc.player, 'update_osd_theme'):
                 pc.player.update_osd_theme()
         except Exception as e:
-            from core.log_manager import global_logger as logger
             logger.error(f"重刷主窗口组件样式失败: {e}")
 
     def _reapply_title_bar_icons(self, window):
@@ -320,7 +318,6 @@ class ThemeManager(Singleton, QtCore.QObject):
                     if tv_icon_path:
                         title_icon_label.setPixmap(QIcon(tv_icon_path).pixmap(16, 16))
         except Exception as e:
-            from core.log_manager import global_logger as logger
             logger.error(f"重刷标题栏图标失败: {e}")
 
     def _is_in_dock(self, widget):
@@ -490,3 +487,17 @@ def get_theme_manager() -> ThemeManager:
     if theme_manager is None:
         theme_manager = ThemeManager()
     return theme_manager
+
+
+def safe_register_window(window):
+    try:
+        get_theme_manager().register_window(window)
+    except Exception:
+        pass
+
+
+def safe_unregister_window(window):
+    try:
+        get_theme_manager().unregister_window(window)
+    except Exception:
+        pass

@@ -3,6 +3,7 @@ UI控制器 - 负责OSD显示、媒体信息更新、样式管理等
 从 pyqt_player.py 提取的独立模块
 """
 
+from core.log_manager import global_logger as logger
 import re
 from typing import Dict, Any
 from datetime import timedelta
@@ -502,12 +503,10 @@ class UIController:
             self._reapply_floating_panel_styles()
 
         except Exception as e:
-            from core.log_manager import global_logger as logger
             logger.error(f"重新应用样式失败: {e}")
 
     def on_live_media_info_updated(self, info: Dict[str, Any]):
         """持续更新媒体信息 - 信息稳定后才更新UI，避免闪烁"""
-        from core.log_manager import global_logger as logger
 
         if not info:
             return
@@ -617,7 +616,6 @@ class UIController:
 
     def update_media_info(self):
         """更新媒体信息显示"""
-        from core.log_manager import global_logger as logger
         from datetime import datetime
 
         is_catchup = self.window.play_state.is_catchup_or_timeshift
@@ -773,7 +771,6 @@ class UIController:
 
     def update_floating_panel_info(self):
         """更新浮动面板信息"""
-        from core.log_manager import global_logger as logger
 
         if not self.window.player_controller or not self.window.current_channel:
             return
@@ -880,7 +877,6 @@ class UIController:
 
 
     def _reapply_side_panel_styles(self):
-        from core.log_manager import global_logger as logger
         from ui.styles import AppStyles
         from PySide6.QtCore import QSize
         from PySide6 import QtWidgets
@@ -889,7 +885,7 @@ class UIController:
         try:
             if hasattr(self.window, 'epg_title'):
                 self.window.epg_title.setStyleSheet(AppStyles.player_epg_title_style())
-                epg_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+                epg_icon_color = AppStyles.get_color('player_panel_text')
                 epg_icon_path = AppStyles.get_icon('calendar', epg_icon_color)
                 if epg_icon_path and hasattr(self.window, 'epg_title_icon'):
                     from PySide6.QtGui import QPixmap
@@ -898,13 +894,13 @@ class UIController:
                 self.window.playlist_title.setStyleSheet(AppStyles.player_playlist_title_style())
             if hasattr(self.window, 'epg_prev_day'):
                 self.window.epg_prev_day.setStyleSheet(AppStyles.player_date_button_style())
-                date_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+                date_icon_color = AppStyles.get_color('player_panel_text')
                 icon_path = AppStyles.get_icon('chevron_left', date_icon_color, 12)
                 if icon_path:
                     self.window.epg_prev_day.setIcon(QIcon(icon_path))
             if hasattr(self.window, 'epg_next_day'):
                 self.window.epg_next_day.setStyleSheet(AppStyles.player_date_button_style())
-                date_icon_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+                date_icon_color = AppStyles.get_color('player_panel_text')
                 icon_path = AppStyles.get_icon('chevron_right', date_icon_color, 12)
                 if icon_path:
                     self.window.epg_next_day.setIcon(QIcon(icon_path))
@@ -947,7 +943,7 @@ class UIController:
                 vb = getattr(self.window, btn_attr, None)
                 if vb:
                     vb.setStyleSheet(AppStyles.player_button_style())
-            btn_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+            btn_color = AppStyles.get_color('player_panel_text')
             for btn_name in ['sub_view_list_btn', 'sub_view_grid_btn', 'local_view_list_btn', 'local_view_grid_btn']:
                 btn = getattr(self.window, btn_name, None)
                 if btn:
@@ -965,7 +961,7 @@ class UIController:
             playlist_tab_btns = getattr(self.window, '_playlist_tab_btns', None)
             if playlist_tab_btns:
                 tab_icon_names = ['signal', 'folder', 'favorite', 'history']
-                accent = AppStyles._get_colors().get('accent', AppStyles._safe_fallback('accent'))
+                accent = AppStyles.get_color('accent')
                 for i, btn in enumerate(playlist_tab_btns):
                     icon_name = tab_icon_names[i] if i < len(tab_icon_names) else 'signal'
                     icon_path = AppStyles.get_icon(icon_name, btn_color, 14)
@@ -991,7 +987,6 @@ class UIController:
             logger.error(f"重新应用侧边栏样式失败: {e}")
 
     def _reapply_floating_panel_styles(self):
-        from core.log_manager import global_logger as logger
         from ui.styles import AppStyles
         from PySide6.QtWidgets import QToolButton, QSlider, QComboBox, QFrame, QLabel
         from PySide6.QtGui import QIcon, QPixmap
@@ -1121,7 +1116,6 @@ class UIController:
 
     def _on_logo_cache_loaded(self, url, pixmap):
         """台标加载完成的回调"""
-        from core.log_manager import global_logger as logger
         from PySide6.QtWidgets import QListWidget
         from PySide6.QtCore import Qt
         from PySide6.QtGui import QIcon
@@ -1180,7 +1174,6 @@ class UIController:
                     break
 
     def _set_log_level(self, level_name, level_value):
-        from core.log_manager import global_logger
         from core.config_manager import ConfigManager
         global_logger.set_level(level_value)
         ConfigManager().set_value('UI', 'log_level', level_name)
@@ -1192,7 +1185,6 @@ class UIController:
         from PySide6.QtWidgets import QMenuBar
         from PySide6.QtGui import QAction
         from ui.styles import AppStyles
-        from core.log_manager import global_logger as logger
 
         if hasattr(self.window, '_custom_menu_bar') and self.window._custom_menu_bar:
             menu_bar = self.window._custom_menu_bar
@@ -1595,7 +1587,6 @@ class UIController:
                 log_menu = help_menu.addMenu(tr("menu_log_level", "日志等级"))
 
                 import logging
-                from core.log_manager import global_logger
                 from core.config_manager import ConfigManager
                 log_levels = [
                     ('DEBUG', logging.DEBUG, tr("log_level_debug", "调试")),

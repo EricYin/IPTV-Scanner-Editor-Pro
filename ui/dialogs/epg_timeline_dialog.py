@@ -119,11 +119,8 @@ class EpgTimelineDialog(FloatingDialog):
         self._setup_ui()
         self._apply_theme()
         self._load_data()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
 
     def reapply_styles(self):
         self._apply_theme()
@@ -515,9 +512,6 @@ class EpgTimelineDialog(FloatingDialog):
             self._load_worker = None
         if hasattr(self, '_now_timer'):
             self._now_timer.stop()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

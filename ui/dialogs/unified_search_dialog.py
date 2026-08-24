@@ -94,11 +94,8 @@ class UnifiedSearchDialog(FloatingDialog):
         self._pending_text = ''
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
 
     def closeEvent(self, event):
         if self._worker:
@@ -106,11 +103,8 @@ class UnifiedSearchDialog(FloatingDialog):
             self._worker.wait(3000)
             self._worker.deleteLater()
             self._worker = None
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)
 
     def reapply_styles(self):

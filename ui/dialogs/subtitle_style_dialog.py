@@ -102,11 +102,8 @@ class SubtitleStyleDialog(FloatingDialog):
         self._loading = False
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
 
     def reapply_styles(self):
         self._apply_theme()
@@ -541,11 +538,8 @@ class SubtitleStyleDialog(FloatingDialog):
             pc.set_sub_visibility(defaults['sub_visibility'])
 
     def closeEvent(self, event):
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)
 
 
@@ -566,11 +560,8 @@ class SubtitleDownloadDialog(FloatingDialog):
         self._results = []
         self._setup_ui()
         self._apply_theme()
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().register_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_register_window
+        safe_register_window(self)
 
     def _apply_theme(self):
         c = AppStyles._get_colors()
@@ -804,9 +795,6 @@ class SubtitleDownloadDialog(FloatingDialog):
                     worker.wait(2000)
                 except Exception:
                     pass
-        try:
-            from ui.theme_manager import get_theme_manager
-            get_theme_manager().unregister_window(self)
-        except Exception:
-            pass
+        from ui.theme_manager import safe_unregister_window
+        safe_unregister_window(self)
         super().closeEvent(event)

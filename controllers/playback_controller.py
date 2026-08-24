@@ -84,7 +84,7 @@ class PlaybackController:
             'progress_end': ("--:--", "setText"),
         }
 
-        btn_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        btn_color = AppStyles.get_color('player_panel_text')
 
         for attr_name, (value, action) in ui_elements.items():
             if not hasattr(self.window, attr_name):
@@ -155,7 +155,7 @@ class PlaybackController:
         if not self.window.volume_button:
             return
 
-        color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        color = AppStyles.get_color('player_panel_text')
         if volume == 0:
             icon_name = 'volume_mute'
         elif volume < 50:
@@ -359,7 +359,7 @@ class PlaybackController:
 
         w = self.window
         tr = w.language_manager.tr
-        btn_color = AppStyles._get_colors().get('player_panel_text', AppStyles._safe_fallback('player_panel_text'))
+        btn_color = AppStyles.get_color('player_panel_text')
         if is_playing:
             pause_path = AppStyles.get_icon('pause', btn_color)
             if pause_path:
@@ -465,13 +465,8 @@ class PlaybackController:
             catchup_source = w.current_channel.get('catchup_source', '') if w.current_channel else ''
             # Fallback：catchup_source 为空时，即时从 URL 检测可回看模式（PLTV/TVOD、SNM/TVOD）
             if not catchup_source and w.current_channel:
-                try:
-                    from services.m3u_parser import detect_catchup_pattern
-                    detected = detect_catchup_pattern(w.current_channel.get('url', ''))
-                    if detected:
-                        catchup_source = detected[1]
-                except Exception:
-                    pass
+                from services.m3u_parser import safe_detect_catchup_source
+                catchup_source = safe_detect_catchup_source(w.current_channel.get('url', ''))
             if catchup_source:
                 has_epg = getattr(w, '_progress_time_mode', None) == 'epg' and w._progress_program_start
                 w._start_live_timeshift_from_progress(position, catchup_source, has_epg=has_epg)

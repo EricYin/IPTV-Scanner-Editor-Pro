@@ -2,6 +2,7 @@
 更新检查控制器 - 负责异步版本检查、在线下载和安装更新
 """
 
+from core.version import APP_USER_AGENT
 import asyncio
 import os
 import sys
@@ -110,7 +111,7 @@ class UpdateCheckThread(QThread):
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     "https://api.github.com/repos/sumingyd/IPTV-Scanner-Editor-Pro/releases/latest",
-                    headers={'User-Agent': 'IPTV-Scanner-Editor-Pro'},
+                    headers={'User-Agent': APP_USER_AGENT},
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as response:
                     if response.status == 200:
@@ -223,7 +224,7 @@ class UpdateDownloadThread(QThread):
                 sha256_url = self._url + '.sha256'
                 async with session.get(
                     sha256_url,
-                    headers={'User-Agent': 'IPTV-Scanner-Editor-Pro'},
+                    headers={'User-Agent': APP_USER_AGENT},
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as sha_resp:
                     if sha_resp.status == 200:
@@ -239,7 +240,7 @@ class UpdateDownloadThread(QThread):
 
             async with session.get(
                 self._url,
-                headers={'User-Agent': 'IPTV-Scanner-Editor-Pro'},
+                headers={'User-Agent': APP_USER_AGENT},
                 timeout=aiohttp.ClientTimeout(total=600)
             ) as response:
                 if response.status != 200:
