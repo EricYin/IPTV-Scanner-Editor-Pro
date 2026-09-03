@@ -63,6 +63,8 @@ class UrlRangeInputWidget(QtWidgets.QWidget):
         self.text_edit.setLineWrapMode(QtWidgets.QPlainTextEdit.LineWrapMode.WidgetWidth)
         self.text_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.text_edit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        from utils.general_utils import setup_i18n_context_menu
+        setup_i18n_context_menu(self.text_edit)
         layout.addWidget(self.text_edit)
 
         self._dropdown_btn = QtWidgets.QToolButton()
@@ -183,6 +185,10 @@ class ScanChannelDialog(FloatingDialog):
         self._init_ui()
 
         self._init_main_window()
+
+        from utils.general_utils import setup_i18n_context_menu
+        for le in self.findChildren(QtWidgets.QLineEdit):
+            setup_i18n_context_menu(le, self.language_manager)
 
         from ..theme_manager import get_theme_manager
         get_theme_manager().register_window(self)
@@ -815,7 +821,7 @@ class ScanChannelDialog(FloatingDialog):
         address_example_label.setMinimumHeight(40)
 
         address_section.addWidget(address_example_label)
-        self.ip_range_input.setMinimumHeight(72)
+        self.ip_range_input.setMinimumHeight(48)
         self.ip_range_input.text_edit.setStyleSheet(AppStyles.url_range_input_style())
         address_section.addWidget(self.ip_range_input)
 

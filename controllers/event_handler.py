@@ -128,7 +128,8 @@ class EventHandler:
                            # 播放队列与控制快捷键
                            Qt.Key.Key_PageUp, Qt.Key.Key_PageDown,
                            Qt.Key.Key_A, Qt.Key.Key_B, Qt.Key.Key_C,
-                           Qt.Key.Key_BracketLeft, Qt.Key.Key_BracketRight)
+                           Qt.Key.Key_BracketLeft, Qt.Key.Key_BracketRight,
+                           Qt.Key.Key_J)
             main_only_keys = (Qt.Key.Key_Up, Qt.Key.Key_Down,
                               Qt.Key.Key_Left, Qt.Key.Key_Right)
             # Backspace 已被上方 _is_input_widget_focused() 检查拦截，此处无需重复判断
@@ -139,7 +140,7 @@ class EventHandler:
             return False
         elif modifiers == Qt.KeyboardModifier.ControlModifier:
             return key in (Qt.Key.Key_O, Qt.Key.Key_S, Qt.Key.Key_Q,
-                           Qt.Key.Key_U, Qt.Key.Key_M, Qt.Key.Key_J)
+                           Qt.Key.Key_U)
         elif modifiers == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
             if key == Qt.Key.Key_O:
                 return True
@@ -380,10 +381,7 @@ class EventHandler:
                     if hasattr(w, 'toggle_mute'):
                         w.toggle_mute()
                     return True
-                elif key == Qt.Key.Key_M:
-                    if hasattr(w, 'toggle_mute'):
-                        w.toggle_mute()
-                    return True
+
 
             elif modifiers == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
                 if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):

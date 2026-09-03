@@ -1566,6 +1566,8 @@ private var currentIsLocalFile: Boolean
             // 如果在 loadfile 之后发送（旧实现），代理不知道新频道，
             // mpv 连接后代理才开始加入组播，导致数秒延迟。
             fccService.onChannelChange(channel.url)
+            // 先应用频道专属设置（vo/hwdec），避免 loadfile 后再重建 VO 触发二次 loadfile
+            applyChannelSettingsIfNeeded(idx)
             mpv.playFile(channel.url)
             mpv.fileLoaded.first { it }
 
@@ -1585,7 +1587,6 @@ private var currentIsLocalFile: Boolean
             }
             refreshCurrentBookmarks()
 
-            applyChannelSettingsIfNeeded(idx)
             loadPlaybackSettingsFromStore(channel.url)
             startTimeoutSwitchSource(idx)
             userPrefs.addToHistory(idx)

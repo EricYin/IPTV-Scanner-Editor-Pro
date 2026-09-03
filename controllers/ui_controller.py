@@ -1303,7 +1303,7 @@ class UIController:
             vol_down = QAction(tr("menu_vol_down", "Volume Down"), self.window)
             vol_down.triggered.connect(lambda: self.window.event_handler._adjust_volume(-5) if hasattr(self.window, 'event_handler') else None)
             vol_menu.addAction(vol_down)
-            mute_action = QAction(tr("menu_mute", "Mute\tCtrl+M"), self.window)
+            mute_action = QAction(tr("menu_mute", "Mute\tJ"), self.window)
             mute_action.triggered.connect(lambda: self.window.toggle_mute() if hasattr(self.window, 'toggle_mute') else None)
             vol_menu.addAction(mute_action)
 

@@ -491,6 +491,70 @@ def redact_url(url: str) -> str:
         return url
 
 
+def setup_i18n_context_menu(widget, language_manager=None):
+    """为 QLineEdit/QPlainTextEdit 设置国际化右键菜单，适配暗色/日间主题。"""
+    from PySide6.QtWidgets import QMenu
+    from PySide6.QtCore import Qt
+    try:
+        from ui.styles import AppStyles
+    except Exception:
+        AppStyles = None
+
+    tr = language_manager.tr if language_manager else (lambda k, d: d)
+
+    def _show_menu(pos):
+        menu = QMenu(widget)
+        if AppStyles:
+            try:
+                menu.setStyleSheet(AppStyles.popup_dialog_style())
+            except Exception:
+                pass
+
+        is_read_only = widget.isReadOnly()
+        has_selection = widget.textCursor().hasSelection() if hasattr(widget, 'textCursor') else widget.hasSelectedText()
+        can_undo = widget.document().isUndoAvailable() if hasattr(widget, 'document') else False
+        can_redo = widget.document().isRedoAvailable() if hasattr(widget, 'document') else False
+        clipboard_text = ''
+        try:
+            from PySide6.QtWidgets import QApplication
+            clipboard_text = QApplication.clipboard().text()
+        except Exception:
+            pass
+
+        act_undo = menu.addAction(tr("ctx_undo", "撤销"))
+        act_undo.setEnabled(can_undo and not is_read_only)
+        act_redo = menu.addAction(tr("ctx_redo", "重做"))
+        act_redo.setEnabled(can_redo and not is_read_only)
+        menu.addSeparator()
+        act_cut = menu.addAction(tr("ctx_cut", "剪切"))
+        act_cut.setEnabled(has_selection and not is_read_only)
+        act_copy = menu.addAction(tr("ctx_copy", "复制"))
+        act_copy.setEnabled(has_selection)
+        act_paste = menu.addAction(tr("ctx_paste", "粘贴"))
+        act_paste.setEnabled(bool(clipboard_text) and not is_read_only)
+        menu.addSeparator()
+        act_select_all = menu.addAction(tr("ctx_select_all", "全选"))
+
+        action = menu.exec(widget.viewport().mapToGlobal(pos) if hasattr(widget, 'viewport') else widget.mapToGlobal(pos))
+        if action is None:
+            return
+        if action == act_undo:
+            widget.undo()
+        elif action == act_redo:
+            widget.redo()
+        elif action == act_cut:
+            widget.cut()
+        elif action == act_copy:
+            widget.copy()
+        elif action == act_paste:
+            widget.paste()
+        elif action == act_select_all:
+            widget.selectAll()
+
+    widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    widget.customContextMenuRequested.connect(_show_menu)
+
+
 def suppress_urllib3_warnings():
     """抑制 urllib3 SSL 警告"""
     try:

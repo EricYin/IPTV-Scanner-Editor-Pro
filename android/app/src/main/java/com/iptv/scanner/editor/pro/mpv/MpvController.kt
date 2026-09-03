@@ -411,6 +411,9 @@ Log.i(TAG, "onSurfaceAboutToDestroy: suppressFileError enabled")
     private var needPreStop = false
 
     @Volatile
+    private var switchingChannel = false
+
+    @Volatile
     private var pendingLoadUrl: String = ""
 
     @Volatile
@@ -425,6 +428,7 @@ Log.i(TAG, "onSurfaceAboutToDestroy: suppressFileError enabled")
         pendingEndFileError = null
         loadingUrl = url
         pendingLoadUrl = url
+        switchingChannel = true
         postOnUiThread {
             if (pendingLoadUrl != url) {
                 Log.i(TAG, "playFile: skipped, superseded (pending=$pendingLoadUrl, this=$url)")
@@ -450,8 +454,12 @@ Log.i(TAG, "onSurfaceAboutToDestroy: suppressFileError enabled")
             } else if (_fileLoaded.value) {
                 // 正常换台：先 stop 释放旧资源，再 loadfile 加载新流
                 try {
+                    // 4K 切换前临时缩小缓冲，强制释放旧 demuxer 缓存
+                    MPVLib.setPropertyString("demuxer-max-bytes", "16MiB")
                     MPVLib.command(arrayOf("stop"))
                     Log.i(TAG, "playFile: pre-stop before loadfile (channel switch, releasing old decoder/VO)")
+                    // 等待硬解器释放（4K MediaCodec 释放较慢，避免与新流初始化竞态）
+                    Thread.sleep(80)
                 } catch (e: Throwable) {
                     Log.w(TAG, "playFile: pre-stop failed: ${e.message}")
                 }
@@ -1516,10 +1524,27 @@ Log.i(TAG, "onSurfaceAboutToDestroy: suppressFileError enabled")
         when (eventId) {
             MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
                 _fileLoaded.value = true
+                switchingChannel = false
 
                 lastLoadedUrl = try { MPVLib.getPropertyString("path") ?: "" } catch (_: Throwable) { "" }
                 _eofReached.value = false
                 loadingUrl = ""
+
+                // 4K 动态缓冲调整（参照 PC 端 _adjust_buffer_for_content）
+                try {
+                    val w = MPVLib.getPropertyInt("width") ?: 0
+                    val h = MPVLib.getPropertyInt("height") ?: 0
+                    if (w >= 3840 || h >= 2160) {
+                        MPVLib.setPropertyString("demuxer-max-bytes", "128MiB")
+                        MPVLib.setPropertyString("demuxer-max-back-bytes", "32MiB")
+                        Log.i(TAG, "4K buffer adjusted: 128MiB/32MiB (${w}x${h})")
+                    } else {
+                        MPVLib.setPropertyString("demuxer-max-bytes", "48MiB")
+                        MPVLib.setPropertyString("demuxer-max-back-bytes", "12MiB")
+                    }
+                } catch (e: Throwable) {
+                    Log.w(TAG, "buffer adjust failed: ${e.message}")
+                }
 
                 // 立即处理 pendingResumePos（surface 重建后的进度恢复）
                 mpvView?.let { v ->
@@ -1560,6 +1585,8 @@ Log.i(TAG, "onSurfaceAboutToDestroy: suppressFileError enabled")
 
                 if (suppressFileErrorFlag) {
                     Log.i(TAG, "MPV_EVENT_END_FILE: suppressed (surface rebuilding), wasLoaded=$wasLoaded")
+                } else if (switchingChannel) {
+                    Log.i(TAG, "MPV_EVENT_END_FILE: suppressed (channel switching), wasLoaded=$wasLoaded")
                 } else if (!wasPlaying && !replacedByNew) {
                     Log.w(TAG, "MPV_EVENT_END_FILE: file '$endedUrl' failed to load, notifying error")
                     postOnUiThread { onFileError?.invoke() }
