@@ -7,6 +7,7 @@ class ServerMixin:
     def _auto_start_server(self):
         try:
             from server.app import set_main_window, start_server, get_server
+            from server.routes import get_auth_token
             set_main_window(self)
             settings = self.config.load_server_settings()
             if settings.get('auto_start', True):
@@ -16,42 +17,49 @@ class ServerMixin:
                 server = get_server()
                 if server.is_running():
                     tr = self.language_manager.tr
+                    token = get_auth_token()
                     self.status_bar_show_message(
-                        tr('server_started', 'Server已启动') + f' http://localhost:{port}'
+                        tr('server_started', '服务已启动') + f' http://localhost:{port}  ' +
+                        tr('server_auth_token', '认证码') + f': {token}', 10000
                     )
-                    logger.info(f"Server后端自动启动: http://{host}:{port}")
+                    logger.info(f"服务已启动: http://{host}:{port}, 认证码: {token}")
         except Exception as e:
-            logger.error(f"自动启动Server失败: {e}")
+            logger.error(f"自动启动服务失败: {e}")
 
     def _toggle_server(self):
         try:
             from server.app import get_server, start_server, stop_server, set_main_window
+            from server.routes import get_auth_token
             set_main_window(self)
             server = get_server()
             tr = self.language_manager.tr
             if server.is_running():
                 stop_server()
-                self.status_bar_show_message(tr('server_stopped', 'Server已停止'))
-                self._server_action.setText(tr('server_start', '启动Server'))
+                self.status_bar_show_message(tr('server_stopped', '服务已停止'))
+                self._server_action.setText(tr('server_start', '启动服务'))
             else:
                 settings = self.config.load_server_settings()
                 port = settings.get('port', 8080)
                 host = settings.get('host', '0.0.0.0')
                 start_server(host=host, port=port)
+                token = get_auth_token()
                 self.status_bar_show_message(
-                    tr('server_started', 'Server已启动') + f' http://localhost:{port}'
+                    tr('server_started', '服务已启动') + f' http://localhost:{port}  ' +
+                    tr('server_auth_token', '认证码') + f': {token}', 10000
                 )
-                self._server_action.setText(tr('server_stop', '停止Server'))
+                self._server_action.setText(tr('server_stop', '停止服务'))
         except Exception as e:
-            logger.error(f"切换Server失败: {e}")
+            logger.error(f"切换服务失败: {e}")
 
     def _open_server_api(self):
         try:
             from server.app import get_server
+            from server.routes import get_auth_token
             server = get_server()
             port = server.port if server and server.is_running() else 8080
+            token = get_auth_token()
             import webbrowser
-            webbrowser.open(f'http://localhost:{port}/')
+            webbrowser.open(f'http://localhost:{port}/?token={token}')
         except Exception as e:
             logger.error(f"打开Server API失败: {e}")
 
@@ -72,6 +80,7 @@ class ServerMixin:
         settings = self.config.load_server_settings()
 
         from server.app import get_server
+        from server.routes import get_auth_token
         server = get_server()
         is_running = server.is_running()
         port = server.port if is_running else settings.get('port', 8080)
@@ -79,16 +88,17 @@ class ServerMixin:
         status_label = QLabel()
         _colors = AppStyles._get_colors()
         if is_running:
-            status_label.setText(f"● {tr('server_running', 'Server运行中')}  http://localhost:{port}")
+            token = get_auth_token()
+            status_label.setText(f"● {tr('server_running', '服务运行中')}  http://localhost:{port}\n  {tr('server_auth_token', '认证码')}: {token}")
             status_label.setStyleSheet(f"color: {_colors.get('success', '#4CAF50')}; font-weight: bold; font-size: 13px;")
         else:
-            status_label.setText(f"○ {tr('server_not_running', 'Server未运行')}")
+            status_label.setText(f"○ {tr('server_not_running', '服务未运行')}")
             status_label.setStyleSheet(f"color: {_colors.get('warning', '#FF9800')}; font-weight: bold; font-size: 13px;")
         layout.addWidget(status_label)
 
         layout.addSpacing(4)
 
-        auto_start_cb = QCheckBox(tr('server_auto_start', '启动时自动运行Server'))
+        auto_start_cb = QCheckBox(tr('server_auto_start', '启动时自动运行服务'))
         auto_start_cb.setChecked(settings.get('auto_start', True))
         layout.addWidget(auto_start_cb)
 

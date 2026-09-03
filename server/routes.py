@@ -27,6 +27,11 @@ if not _AUTH_TOKEN:
 # 允许的流代理 URL 协议
 _ALLOWED_STREAM_PROTOCOLS = {'http', 'https', 'rtsp', 'rtmp', 'rtp', 'udp', 'srt'}
 
+
+def get_auth_token() -> str:
+    """返回当前认证 Token"""
+    return _AUTH_TOKEN
+
 # 共享 aiohttp ClientSession（流代理用），延迟初始化
 _stream_session = None
 _stream_session_lock = asyncio.Lock()
